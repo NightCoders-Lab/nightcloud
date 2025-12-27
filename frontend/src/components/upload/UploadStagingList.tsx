@@ -1,5 +1,5 @@
 import { FileCategoryIcons } from "@/data/fileCategoryIcons";
-import { useUploadStage } from "@/hooks/stores/useUploadStage";
+import { useUploadStage } from "@/hooks/upload/useUploadStage";
 import classNames from "@/utils/classNames";
 import { getCategoryFromMime } from "@/utils/files/getCategoryFromExtAndMime";
 import getHumanFileSize from "@/utils/files/getHumanFileSize";

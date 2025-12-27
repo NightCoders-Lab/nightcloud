@@ -14,7 +14,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const matchRoot = useMatch("/");
   const matchDirectory = useMatch("/directory/:nodeId");
-  const openModal = () => navigate(location.pathname + "?uploadFiles=true");
+  const openModal = () => navigate(location.pathname + "?action=upload-files");
   const enabledUpload =
     !!matchRoot || (!!matchDirectory && !!matchDirectory.params.nodeId);
 

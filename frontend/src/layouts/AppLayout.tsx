@@ -18,6 +18,10 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useMoveNodeOnDrop } from "@/utils/useMoveNodeOnDrop";
+import { useUploadScheduler } from "@/hooks/upload/useUploadScheduler";
+import { useUploadQuerySync } from "@/hooks/upload/useUploadQuerySync";
+import { useUploadInvalidateQueries } from "@/hooks/upload/useUploadInvalidateQueries";
+import { useUploadToast } from "@/hooks/upload/useUploadToast";
 
 export default function AppLayout() {
   const location = useLocation();
@@ -53,6 +57,12 @@ export default function AppLayout() {
       },
     })
   );
+
+  // Sistema de subida de archivos
+  useUploadScheduler(); // Iniciar el scheduler de subidas
+  useUploadQuerySync(); // Sincronizar el estado de las subidas con las queries
+  useUploadInvalidateQueries(); // Invalidar queries al completar subidas
+  useUploadToast(); // Gestionar toasts de subida
 
   // Obtener el handler para mover nodos al soltar
   const { handleNodeDrop } = useMoveNodeOnDrop();

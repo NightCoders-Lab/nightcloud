@@ -12,8 +12,8 @@ import {
   type NodeLiteType,
   type NodeRenameFormData,
   type NodeType,
-  type UploadProgress,
 } from "@/types";
+import type { UploadProgress } from "@/types/upload.types";
 import type { FileWithPath } from "react-dropzone";
 import validateApiRes from "@/utils/validateApiRes";
 

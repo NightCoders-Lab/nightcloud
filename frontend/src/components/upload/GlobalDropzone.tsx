@@ -2,7 +2,7 @@ import { useDropzone } from "react-dropzone";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMatch, useParams } from "react-router-dom";
 import { HiOutlineCloudUpload } from "react-icons/hi";
-import { useUploadFiles } from "@/hooks/useUploadFiles";
+import { useUploadFiles } from "@/hooks/upload/useUploadFiles";
 import classNames from "@/utils/classNames";
 import { useGlobalFileDrag } from "@/hooks/useGlobalFileDrag";
 import { toast } from "react-toastify";
@@ -12,7 +12,7 @@ export default function GlobalDropzone() {
   const matchDirectory = useMatch("/directory/:nodeId");
   const { nodeId: parentId } = useParams();
   const enabled = !!matchRoot || (!!matchDirectory && !!parentId);
-  const { mutate } = useUploadFiles(parentId || null);
+  const { uploadFiles } = useUploadFiles(parentId || null);
   const isGlobalDragActive = useGlobalFileDrag();
   const uploadLimit = Number(import.meta.env.VITE_API_UPLOAD_FILES_LIMIT) || 10;
 
@@ -33,11 +33,9 @@ export default function GlobalDropzone() {
       }
 
       // Iniciar la mutación de subida de archivos
-      const data = { files };
-      mutate(data);
+      uploadFiles(files);
     },
     multiple: true, // Permitir múltiples archivos
-    maxFiles: uploadLimit, // Límite de archivos
     noClick: true, // Deshabilitar clic para abrir el diálogo
     noKeyboard: true, // Deshabilitar soporte de teclado
     disabled: !enabled,

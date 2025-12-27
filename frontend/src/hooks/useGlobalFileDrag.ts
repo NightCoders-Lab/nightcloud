@@ -10,7 +10,7 @@ export function useGlobalFileDrag() {
   // Obtener los query params
   const queryParams = new URLSearchParams(location.search);
   // Verificar si el modal de subida de archivos está abierto
-  const isUploadModalOpen = queryParams.get("uploadFiles") === "true";
+  const isUploadModalOpen = queryParams.get("action") === "upload-files";
 
   useEffect(() => {
     // Cuando el cursor entra en el área

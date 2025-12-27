@@ -16,6 +16,10 @@ import {
   type ContextMenuState,
 } from "./contextMenuSlice";
 import { createUploadSlice, type UploadSliceType } from "./uploadSlice";
+import {
+  createUploadJobSlice,
+  type UploadJobSliceType,
+} from "./uploadJobSlice";
 
 export const useAppStore = create<
   NodeSliceType &
@@ -24,7 +28,8 @@ export const useAppStore = create<
     ExplorerSliceType &
     BreadcrumbSliceType &
     ContextMenuState &
-    UploadSliceType
+    UploadSliceType &
+    UploadJobSliceType
 >()(
   devtools((...args) => ({
     ...createNodeSlice(...args),
@@ -34,5 +39,6 @@ export const useAppStore = create<
     ...createBreadcrumbSlice(...args),
     ...createContextMenuSlice(...args),
     ...createUploadSlice(...args),
+    ...createUploadJobSlice(...args),
   }))
 );

@@ -2,12 +2,12 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Modal from "../Modal";
 import UploadDropzone from "./UploadDropzone";
 import { useNode } from "@/hooks/useNode";
-import { useUploadFiles } from "@/hooks/useUploadFiles";
+import { useUploadFiles } from "@/hooks/upload/useUploadFiles";
 import UploadStagingList from "./UploadStagingList";
 import { useMemo } from "react";
 import NodeExplorer from "../node/NodeExplorer";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
-import { useUploadStage } from "@/hooks/stores/useUploadStage";
+import { useUploadStage } from "@/hooks/upload/useUploadStage";
 
 export default function ModalDropzone() {
   const location = useLocation();
@@ -15,11 +15,11 @@ export default function ModalDropzone() {
   const { nodeId: parentId } = useParams();
   const { stagedFiles, clearStagedFiles } = useUploadStage();
   const queryParams = new URLSearchParams(location.search);
-  const isOpen = queryParams.get("uploadFiles") === "true";
+  const isOpen = queryParams.get("action") === "upload-files";
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
   const uploadLimit = Number(import.meta.env.VITE_API_UPLOAD_FILES_LIMIT) || 10;
   const { selectedFolderId } = useExplorer();
-  const { mutate } = useUploadFiles(selectedFolderId ?? null);
+  const { uploadFiles } = useUploadFiles(selectedFolderId ?? null);
   const filesToUpload = useMemo(
     () => stagedFiles.map((f) => f.file),
     [stagedFiles]
@@ -32,7 +32,7 @@ export default function ModalDropzone() {
   if (!children.data) return null;
 
   const handleOnUpload = () => {
-    mutate({ files: filesToUpload });
+    uploadFiles(filesToUpload);
     closeModal();
     clearStagedFiles();
   };

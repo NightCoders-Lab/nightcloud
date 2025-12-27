@@ -119,12 +119,5 @@ export type NodeMoveFormData = Pick<NodeType, "name">;
 // Otros types
 // ----------------------------------
 
-// Type para el progreso de subida de archivos
-export type UploadProgress = {
-  loaded: number;
-  total: number;
-  percent: number;
-};
-
 // Type para la dirección de ordenamiento
 export type SortDirection = "asc" | "desc";

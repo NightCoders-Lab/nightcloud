@@ -61,9 +61,9 @@ export function cancelUploadToast(toastId: Id) {
   toast.update(toastId, {
     render: "File upload cancelled",
     type: "warning",
+    isLoading: false,
     autoClose: 3000,
     progress: undefined,
-    closeOnClick: true,
   });
 }
 
