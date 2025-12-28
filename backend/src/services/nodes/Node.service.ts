@@ -61,14 +61,6 @@ export class NodeService {
         nodeHash,
       );
 
-      // Actualizar el tamaño del nodo padre si es una carpeta
-      if (parentId) {
-        const parentNode = await this.repo.findByIdTx(tx, parentId);
-        if (parentNode) {
-          await this.incrementNodeSizeByIdTx(tx, parentId, file.size);
-        }
-      }
-
       console.log(`Node processed: ${nodeName} as ${nodeHash}`);
       return node;
     } catch (err) {
@@ -119,11 +111,6 @@ export class NodeService {
         nodeName,
         nodeHash,
       );
-
-      // Actualizar el tamaño del nodo padre si es una carpeta
-      if (newParentId) {
-        await this.incrementNodeSizeByIdTx(tx, newParentId, file.size);
-      }
 
       console.log(`Node processed: ${nodeName} as ${nodeHash}`);
       return node;
@@ -707,21 +694,15 @@ export class NodeService {
    * @param newSize Nuevo tamaño del nodo
    * @returns Nodo actualizado
    */
-  static async incrementNodeSizeByIdTx(
-    tx: PrismaTxClient,
+  static async incrementNodeSizeById(
     nodeId: Node["id"],
     newSize: bigint,
   ): Promise<Node> {
     // Propagar el cambio de tamaño a los ancestros
-    await this.repo.propagateSizeToAncestorsTx(
-      tx,
-      nodeId,
-      newSize,
-      "increment",
-    );
+    await this.repo.propagateSizeToAncestors(nodeId, newSize, "increment");
 
     // Retornamos el nodo actualizado, ya que sabemos que existe previamente le decimos a ts que no sera null
-    return (await this.repo.findByIdTx(tx, nodeId))!;
+    return (await this.repo.findById(nodeId))!;
   }
 
   /**

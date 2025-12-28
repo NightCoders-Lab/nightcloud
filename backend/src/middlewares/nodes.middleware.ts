@@ -140,40 +140,46 @@ export const nodeProcess = async (
     // Cliente de prisma para la transacción
     const prisma = DB.getClient();
 
-    await prisma.$transaction(async (tx) => {
-      // Procesar cada archivo subido
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        // Si la subida fue abortada, tirar error para salir de la transacción y el ciclo
-        if (aborted) throw new AppError("UPLOAD_ABORTED");
+    // Procesar cada archivo subido
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      // Si la subida fue abortada, tirar error para salir de la transacción y el ciclo
+      if (aborted) throw new AppError("UPLOAD_ABORTED");
 
-        // Obtener el archivo y su entrada en el manifiesto (si existe)
-        const file = uploadedFiles[i];
-        const fileManifest = manifest ? manifest[i] : null;
+      // Obtener el archivo y su entrada en el manifiesto (si existe)
+      const file = uploadedFiles[i];
+      const fileManifest = manifest ? manifest[i] : null;
 
-        console.log(
-          `Node uploaded: ${file.filename} (${file.size.toString()} bytes)`,
-        );
+      console.log(
+        `Node uploaded: ${file.filename} (${file.size.toString()} bytes)`,
+      );
 
-        // Procesar el nodo subido
-        const node = fileManifest
-          ? await NodeService.processWithManifestTx(
-              tx,
-              file,
-              parentId ?? null,
-              fileManifest,
-              dirCache,
-            )
-          : await NodeService.processTx(tx, file, parentId ?? null);
-
-        // Si la subida fue abortada, tirar error para salir de la transacción y el ciclo
-        if (aborted) {
-          throw new AppError("UPLOAD_ABORTED");
+      // Procesar el nodo subido
+      const node = await prisma.$transaction(async (tx) => {
+        if (fileManifest) {
+          return await NodeService.processWithManifestTx(
+            tx,
+            file,
+            parentId ?? null,
+            fileManifest,
+            dirCache,
+          );
         }
 
-        // Almacenamos el resultado
-        results.push(node);
+        return await NodeService.processTx(tx, file, parentId ?? null);
+      });
+
+      if (node.parentId) {
+        await NodeService.incrementNodeSizeById(node.parentId, file.size);
       }
-    });
+
+      // Si la subida fue abortada, tirar error para salir de la transacción y el ciclo
+      if (aborted) {
+        throw new AppError("UPLOAD_ABORTED");
+      }
+
+      // Almacenamos el resultado
+      results.push(node);
+    }
 
     // Si la subida fue abortada, revertir los nodos creados, tanto en DB como en almacenamiento
     if (aborted) {
