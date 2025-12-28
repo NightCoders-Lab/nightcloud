@@ -42,7 +42,8 @@ export class NodeService {
     parentId: Node["id"] | null,
   ) {
     try {
-      // Resolver nombre y hash unicos
+      // Resolver nombre y hash unicos - SI se dan condiciones de carrera,
+      // persistTx no confiara en este resultado y iterara para conseguir uno unico
       const { nodeName, nodeHash } = await this.identity.resolveTx(
         tx,
         file,
@@ -93,7 +94,7 @@ export class NodeService {
     dirCache: Map<string, Node>,
   ) {
     try {
-      // Asegurar que la ruta de directorios del manifiesto exista
+      // Asegurar que la ruta de directorios del manifiesto exista - AHORA SAFE CONCURRENCY
       const newParentId = await NodeTreeService.ensureManifestPathTree(
         tx,
         parentId,
