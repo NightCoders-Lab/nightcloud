@@ -9,6 +9,7 @@ import type { PrismaTxClient } from "@/types/prisma";
 import type { UploadManifestEntry } from "@/types/upload";
 import { AppError, NodeUtils } from "@/utils";
 import parseManifestPath from "@/utils/nodes/parseManifestPath";
+import { isPrismaUniqueError } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
 import { CloudStorageService } from "../cloud/CloudStorage.service";
@@ -783,8 +784,6 @@ export class NodeTreeService {
   ) {
     // Parsear la ruta del manifiesto
     const { parts, isDirectory } = parseManifestPath(manifest.path);
-    // Tipo mime para directorios
-    const mime = "inode/directory";
 
     // Determinar las partes de la ruta a procesar
     // Si es un directorio, procesamos todas las partes
@@ -796,54 +795,90 @@ export class NodeTreeService {
 
     // Iteramos sobre cada parte de la ruta para asegurarnos de que los directorios existen
     for (const dirName of dirNames) {
-      // Verificar si ya tenemos este directorio en cache
-      const cacheKey = `${currentParentId ?? "root"}:${dirName}`; // Clave unica por parentId + dirName
-      // Buscar en cache
-      let dir: Node | null | undefined = dirCache.get(cacheKey);
-
-      // Si no está en cache, buscarlo en la base de datos
-      if (dir === undefined) {
-        dir = await this.repo.findByNameAndParentIdTx(
-          tx,
-          dirName,
-          currentParentId,
-        );
-
-        // Si no existe, lo creamos
-        if (!dir) {
-          // Resolver nombre y hash unicos
-          const nodeName = await this.identity.resolveNameTx(
-            tx,
-            currentParentId,
-            dirName,
-          );
-          const nodeHash = NodeUtils.genDirectoryHash(
-            nodeName,
-            currentParentId,
-          );
-
-          // Crear el directorio en la base de datos
-          dir = await this.repo.createTx(tx, {
-            name: nodeName,
-            parent: currentParentId
-              ? { connect: { id: currentParentId } }
-              : undefined,
-            hash: nodeHash,
-            size: 0n,
-            isDir: true,
-            mime,
-          });
-        }
-
-        // Almacenar en cache
-        dirCache.set(cacheKey, dir);
-      }
-
+      // Asegurarnos de que el directorio existe o crearlo si no existe
+      const dir = await this.ensureDirectoryTx(
+        tx,
+        currentParentId,
+        dirName,
+        dirCache,
+      );
       // Actualizar el currentParentId para la siguiente iteración
-      currentParentId = dir.id ?? null;
+      currentParentId = dir.id;
     }
 
     // Retornar el ID del último directorio creado o encontrado
     return currentParentId;
+  }
+
+  /**
+   * @description Asegura que un directorio exista en la base de datos, creándolo si no existe
+   * @param tx Transacción de Prisma
+   * @param parentId ID del nodo padre donde se ubicará el directorio
+   * @param dirName Nombre del directorio a asegurar
+   * @param dirCache Cache de directorios ya creados o encontrados
+   * @returns Nodo del directorio asegurado
+   */
+  private static async ensureDirectoryTx(
+    tx: PrismaTxClient,
+    parentId: Node["id"] | null,
+    dirName: string,
+    dirCache: Map<string, Node>,
+  ): Promise<Node> {
+    // Verificar si ya tenemos este directorio en cache
+    const cacheKey = `${parentId ?? "root"}:${dirName}`; // Clave unica por parentId + dirName
+    // Buscar en cache
+    let dir: Node | null | undefined = dirCache.get(cacheKey);
+    if (dir) return dir;
+
+    dir ??= await this.createDirectorySafelyTx(tx, parentId, dirName);
+
+    // SI no se encontró ni creó el directorio, lanzar error
+    if (!dir) {
+      throw new AppError(
+        "INTERNAL",
+        "Error al subir el directorio, no se encontró ni creó el directorio esperado.",
+      );
+    }
+
+    dirCache.set(cacheKey, dir);
+    return dir;
+  }
+
+  /**
+   * @description Crea un directorio de forma segura en la base de datos, manejando condiciones de carrera
+   * @param tx Transacción de Prisma
+   * @param parentId ID del nodo padre donde se ubicará el directorio
+   * @param dirName Nombre del directorio a crear
+   * @returns Nodo del directorio creado o existente
+   */
+  private static async createDirectorySafelyTx(
+    tx: PrismaTxClient,
+    parentId: Node["id"] | null,
+    dirName: string,
+  ): Promise<Node | null> {
+    const nodeHash = NodeUtils.genDirectoryHash(dirName, parentId);
+    const mime = "inode/directory";
+
+    try {
+      return await this.repo.createTx(tx, {
+        name: dirName,
+        parent: parentId ? { connect: { id: parentId } } : undefined,
+        hash: nodeHash,
+        size: 0n,
+        isDir: true,
+        mime,
+      });
+    } catch (err) {
+      if (!isPrismaUniqueError(err)) throw err;
+
+      // Si hay un error de unicidad, significa que otro proceso creó el directorio al mismo tiempo
+      // Por lo que simplemente lo buscamos de nuevo
+      const existingDir = await this.repo.findByNameAndParentIdTx(
+        tx,
+        dirName,
+        parentId,
+      );
+      return existingDir;
+    }
   }
 }
