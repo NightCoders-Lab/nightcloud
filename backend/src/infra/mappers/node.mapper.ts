@@ -42,6 +42,6 @@ export function fromAncestorRow(r: AncestorRow): NodeLite {
  * @param r Fila de descendiente a mapear
  * @returns Nodo de dominio mapeado
  */
-export function fromDescendantRow(r: DescendantRow): NodeLite {
+export function fromDescendantRow(r: DescendantRow) {
   return fromAncestorRow(r);
 }

@@ -184,6 +184,28 @@ export class NodeRepository {
   }
 
   /**
+   * @description Actualiza el nombre de un nodo por su ID dentro de una transaccion
+   * @param tx Transaccion de Prisma
+   * @param id ID del nodo a actualizar
+   * @param newName Nuevo nombre para el nodo
+   * @returns Nodo actualizado
+   */
+  static async updateNameByIdTx(
+    tx: PrismaTxClient,
+    id: Node["id"],
+    newName: string,
+  ) {
+    const res = await tx.node.update({
+      where: { id },
+      data: {
+        name: newName,
+      },
+    });
+
+    return fromPrismaNode(res);
+  }
+
+  /**
    * @description Actualiza el nombre y hash de un nodo por su ID
    * @param tx Transaccion de Prisma
    * @param id ID del nodo a actualizar

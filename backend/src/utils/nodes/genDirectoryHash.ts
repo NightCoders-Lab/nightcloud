@@ -1,23 +1,16 @@
 import crypto from "node:crypto";
 
-import { computeNodeIdentity } from "@/domain/nodes/identity/computeNodeIdentity";
-
 /**
- * @description
- * @param nodeName Nombre del nodo completo
- * @param parentId Id del padre del nodo
- * @returns string Hash SHA256 del nodo + nombre con su extension
+ * @description Genera un hash único para un directorio basado en su UUID.
+ * @param nodeUUID UUID del nodo
+ * @returns string Hash generado
  */
-export default function genDirectoryHash(
-  nodeName: string,
-  parentId: string | null,
-) {
+export default function genDirectoryHash(nodeUUID: string) {
   // Crear hash SHA256 del nodo
   const hash = crypto.createHash("sha256");
 
-  // Agregar el nombre y parentId, si aplica, del nodo al hash
-  const { identityName } = computeNodeIdentity(nodeName, parentId);
-  hash.update(identityName);
+  // Actualizar el hash con el UUID del nodo
+  hash.update(nodeUUID);
 
   // Retornar el hash en formato hexadecimal y agregar o no la extension original
   return hash.digest("hex");
