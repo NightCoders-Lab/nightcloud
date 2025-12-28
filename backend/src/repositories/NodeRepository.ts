@@ -564,6 +564,34 @@ export class NodeRepository {
    * @description Propaga el incremento o decremento de tamaño a los ancestros de un nodo
    * @param id ID del nodo desde el cual propagar el incremento/decremento
    * @param delta Incremento/Decremento de tamaño a propagar
+   * @param mode "increment" | "decrement"
+   */
+  static async propagateSizeToAncestors(
+    id: Node["id"],
+    delta: bigint,
+    mode: "increment" | "decrement",
+  ): Promise<void> {
+    // Obtener los ancestros del nodo
+    const ancestors = await prisma.getAncestors(id);
+    console.log("Propagating size to ancestors:", ancestors);
+
+    // Actualizar el tamaño de cada ancestro
+    await prisma.node.updateMany({
+      where: {
+        id: { in: ancestors.map((a) => a.id) },
+      },
+      data: {
+        size: {
+          [mode]: delta, // Usar incremento o decremento segun el modo
+        },
+      },
+    });
+  }
+
+  /**
+   * @description Propaga el incremento o decremento de tamaño a los ancestros de un nodo
+   * @param id ID del nodo desde el cual propagar el incremento/decremento
+   * @param delta Incremento/Decremento de tamaño a propagar
    */
   static async propagateSizeToAncestorsTx(
     tx: PrismaTxClient,
