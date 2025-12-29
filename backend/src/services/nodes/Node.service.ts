@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { DB } from "@/config/db";
 import type {
   DirectoryNode,

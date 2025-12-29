@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import path from "node:path";
 
 import { buildConflictRegex } from "@/domain/nodes/conflicts/buildConflictRegex";
@@ -49,7 +50,7 @@ export class NodeIdentityService {
         parentId,
       );
 
-      // Si no hay conflicto, retornamos el nombre, hash y UUID resueltos
+      // Si hay conflicto, generamos un nuevo nombre único y actualizamos el nodo
       if (conflict) {
         // Obtenemos los nombres que ya existen y que generan conflicto
         const conflictingNames = await this.repo.findConflictingNamesTx(
@@ -99,14 +100,14 @@ export class NodeIdentityService {
         ? node.originalname
         : params.newName || node.name;
 
-      // Buscamos si ya existe un nodo con el mismo hash en la carpeta destino
+      // Buscamos si ya existe un nodo con el mismo nombre en la carpeta destino
       const conflict = await this.repo.findByNameAndParentIdTx(
         tx,
         nodeName,
         parentId,
       );
 
-      // Si no hay conflicto, retornamos el nombre y hash resueltos
+      // Si hay conflicto, generamos un nuevo nombre único y actualizamos el nodo
       if (conflict) {
         // Obtenemos los nombres que ya existen y que generan conflicto
         const conflictingNames = await this.repo.findConflictingNamesTx(
