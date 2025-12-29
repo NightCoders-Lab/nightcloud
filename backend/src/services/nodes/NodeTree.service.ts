@@ -1,7 +1,15 @@
+import crypto from "node:crypto";
 import path from "node:path";
 
 import { DB } from "@/config/db";
-import type { FileNode, Node, NodeLite } from "@/domain/nodes/node";
+import type {
+  DirectoryNode,
+  DirectoryNodeLite,
+  FileNode,
+  FileNodeLite,
+  Node,
+  NodeLite,
+} from "@/domain/nodes/node";
 import { fromDescendantRow } from "@/infra/mappers/node.mapper";
 import type { DescendantRow } from "@/infra/prisma/types";
 import { NodeRepository } from "@/repositories/NodeRepository";
@@ -37,7 +45,7 @@ export class NodeTreeService {
    * @returns Nodos copiados
    */
   static async copyNodeDir(
-    node: Node,
+    node: DirectoryNode,
     parentId: Node["parentId"],
     options?: {
       newName?: string;
@@ -49,16 +57,17 @@ export class NodeTreeService {
 
     return await this.prisma.$transaction(async (tx) => {
       // Resolver el nuevo nombre y hash para el nodo de directorio
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
-        tx,
-        node,
-        parentId,
-        options?.newName
-          ? {
-              newName: options.newName,
-            }
-          : undefined,
-      );
+      const { nodeName, nodeHash, nodeUUID } =
+        await this.identity.resolveNodeDirTx(
+          tx,
+          node,
+          parentId,
+          options?.newName
+            ? {
+                newName: options.newName,
+              }
+            : undefined,
+        );
 
       // Almacenar el nodo copiado
       const nodesToCopy = await this.repo.getAllNodeDescendantsTx(tx, node.id);
@@ -73,6 +82,7 @@ export class NodeTreeService {
 
       // Crear el nodo de la carpeta copiada
       const copiedDir = await this.repo.createTx(tx, {
+        id: nodeUUID,
         name: nodeName,
         parent: parentId ? { connect: { id: parentId } } : undefined,
         hash: nodeHash,
@@ -130,7 +140,7 @@ export class NodeTreeService {
    * @returns Nodos copiados
    */
   static async bulkCopyNodeDirs(
-    nodes: Node[],
+    nodes: DirectoryNode[],
     parentId: Node["parentId"],
     options?: {
       mode?: "copy" | "move";
@@ -160,14 +170,16 @@ export class NodeTreeService {
         // Copiar cada árbol de nodos de directorio uno por uno
         for (const rootNode of rootNodes) {
           // Primero le resolvemos una identidad única al nodo root, dentro del parentId dado
-          const { nodeName, nodeHash } = await this.identity.resolveTx(
-            tx,
-            fromDescendantRow(rootNode),
-            parentId,
-          );
+          const { nodeUUID, nodeName, nodeHash } =
+            await this.identity.resolveNodeDirTx(
+              tx,
+              fromDescendantRow(rootNode) as DirectoryNodeLite, // Es seguro castear porque esta funcion solo recibe nodos de directorio y los roots siempre son directorios
+              parentId,
+            );
 
           // Luego creamos el nodo root copiado en la base de datos
           const copiedDir = await this.repo.createTx(tx, {
+            id: nodeUUID,
             name: nodeName,
             parent: parentId ? { connect: { id: parentId } } : undefined,
             hash: nodeHash,
@@ -249,7 +261,7 @@ export class NodeTreeService {
    * @returns Nodos movidos
    */
   static async moveNodeDir(
-    node: Node,
+    node: DirectoryNode,
     parentId: Node["parentId"],
     options?: { newName?: string },
   ) {
@@ -285,7 +297,10 @@ export class NodeTreeService {
    * @param parentId ID del nodo padre donde se ubicará los directorios movidos
    * @returns Nodos movidos
    */
-  static async bulkMoveNodeDirs(nodes: Node[], parentId: Node["parentId"]) {
+  static async bulkMoveNodeDirs(
+    nodes: DirectoryNode[],
+    parentId: Node["parentId"],
+  ) {
     return await this.bulkCopyNodeDirs(
       nodes,
       parentId,
@@ -351,10 +366,7 @@ export class NodeTreeService {
           id,
           parentId: parent ? parent.id : null,
           name: dirNode.name,
-          hash: NodeUtils.genDirectoryHash(
-            dirNode.name,
-            parent ? parent.id : null,
-          ),
+          hash: NodeUtils.genDirectoryHash(id),
           size: dirNode.size,
           mime: "inode/directory",
           isDir: true,
@@ -390,11 +402,11 @@ export class NodeTreeService {
     // Ahora copiar todos los nodos (archivos) concurrentemente
     for (const file of files) {
       // Mapear el nodo hijo
-      const childNode = fromDescendantRow(file);
+      const childNode = fromDescendantRow(file) as FileNodeLite;
       const parent = dirMap.get(childNode.parentId!)!;
 
       // Resolver el nuevo nombre y hash para el nodo hijo
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
+      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
         tx,
         childNode,
         parent.id,
@@ -473,7 +485,7 @@ export class NodeTreeService {
     // Transacción para "mover" el nodo en la base de datos
     return await this.prisma.$transaction(async (tx) => {
       // Asegurarse de que la extension se mantenga igual si es
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
+      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
         tx,
         node,
         parentId,
@@ -560,7 +572,7 @@ export class NodeTreeService {
         // Iterar sobre todos los nodos a mover
         for (const node of nodes) {
           // Asegurarse de que la extension se mantenga igual si es
-          const { nodeName, nodeHash } = await this.identity.resolveTx(
+          const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
             tx,
             node,
             parentId,
@@ -651,7 +663,7 @@ export class NodeTreeService {
     // Transaccion para "copiar" el nodo en la base de datos
     return await this.prisma.$transaction(async (tx) => {
       // Asegurarse de que la extension se mantenga igual si es
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
+      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
         tx,
         node,
         parentId,
@@ -717,7 +729,7 @@ export class NodeTreeService {
       async (tx) => {
         const copiedNodes: Node[] = [];
         for (const node of nodes) {
-          const { nodeName, nodeHash } = await this.identity.resolveTx(
+          const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
             tx,
             node,
             parentId,
@@ -856,11 +868,13 @@ export class NodeTreeService {
     parentId: Node["id"] | null,
     dirName: string,
   ): Promise<Node | null> {
-    const nodeHash = NodeUtils.genDirectoryHash(dirName, parentId);
+    const id = crypto.randomUUID() as string;
+    const nodeHash = NodeUtils.genDirectoryHash(id);
     const mime = "inode/directory";
 
     try {
       return await this.repo.createTx(tx, {
+        id,
         name: dirName,
         parent: parentId ? { connect: { id: parentId } } : undefined,
         hash: nodeHash,

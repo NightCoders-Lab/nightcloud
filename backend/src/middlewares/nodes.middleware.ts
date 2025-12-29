@@ -1,14 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 import { MulterError } from "multer";
 
-import { DB } from "@/config/db";
-import type { Node } from "@/domain/nodes/node";
-import { isUploadManifest } from "@/infra/guards/uploaded-file";
 import { fromMulterFile } from "@/infra/upload/multer-file";
 import { multerUpload } from "@/infra/upload/multer.upload";
-import { CloudStorageService } from "@/services/cloud/CloudStorage.service";
 import { NodeService } from "@/services/nodes/Node.service";
-import { AppError, toAppError } from "@/utils";
+import { AppError, FsUtils, NodeUtils, toAppError } from "@/utils";
 
 /**
  * @description Middleware para manejar la subida de archivos
@@ -18,53 +14,38 @@ import { AppError, toAppError } from "@/utils";
  */
 export const nodeUpload = (req: Request, res: Response, next: NextFunction) => {
   // Configurar multer para manejar multiples archivos
-  const node = multerUpload.array(
+  const upload = multerUpload.array(
     process.env.FRONTEND_FORM_FIELD_NAME ?? "file", // Default form field name "file"
     Number(process.env.CLOUD_MAX_UPLOAD_FILES) || 10, // Max 10 files
   );
 
-  // Flag para detectar si la subida fue cancelada
-  let clientAborted = false;
-
-  // Función para manejar la cancelación
-  const onAbort = () => {
-    clientAborted = true;
-  };
-
-  // Escuchar el evento de abort
-  req.on("aborted", onAbort);
+  const { isAborted, cleanup } = NodeUtils.setupClientAbort(req);
 
   // Ejecutar el middleware de multer
-  node(req, res, async (err: unknown) => {
+  upload(req, res, async (err: unknown) => {
     // Remover el listener de abort ya que multer habra terminado a este punto
-    req.off("aborted", onAbort);
+    cleanup();
 
     // Si la subida fue cancelada por el cliente, eliminar los archivos subidos
     // writableEnded se usa para verificar si la respuesta ya fue enviada
-    if (clientAborted && req.files && !res.writableEnded) {
+    if (isAborted() && req.files && !res.writableEnded) {
       const files = req.files as Express.Multer.File[];
-
-      try {
-        await CloudStorageService.deleteFiles(files.map((f) => f.path));
-      } catch (err) {
-        console.error("Error deleting files after client abort:", err);
-      }
-
+      await FsUtils.cleanupUploadedFiles(files);
       return;
     }
 
     // Manejar errores de multer y otros errores
     if (err instanceof MulterError) {
-      return next(toAppError(err));
+      throw toAppError(err);
     }
 
     if (err instanceof AppError) {
-      return next(err);
+      throw err;
     }
 
     if (err) {
       console.error(err);
-      return next(new AppError("INTERNAL"));
+      throw new AppError("INTERNAL");
     }
 
     next();
@@ -86,111 +67,39 @@ export const nodeProcess = async (
   _res: Response,
   next: NextFunction,
 ) => {
+  // Asegurarse de que haya archivos subidos
+  if (!req.files || (req.files as Express.Multer.File[]).length === 0)
+    throw new AppError("NO_FILES_UPLOADED");
+
+  // Configurar el manejo de abortos
+  const { isAborted, cleanup } = NodeUtils.setupAbortHandling(req);
+
   try {
-    // Verificar que existan archivos subidos
-    if (!req.files || (req.files as Express.Multer.File[]).length === 0)
-      throw new AppError("NO_FILES_UPLOADED");
-
-    // Flag para detectar si la subida fue abortada
-    let aborted = false;
-
-    // Función para manejar la cancelación
-    const onAbort = () => {
-      aborted = true;
-    };
-
-    // Escuchar eventos de abort y close
-    req.on("aborted", onAbort);
-    req.on("close", onAbort);
-
     // Convertir los archivos de Multer a UploadedFile
-    const uploadedFiles = (req.files as Express.Multer.File[]).map((f) =>
-      fromMulterFile(f),
+    const uploadedFiles = (req.files as Express.Multer.File[]).map(
+      fromMulterFile,
     );
 
-    const { parentId } = req.body;
-    const results: Node[] = [];
+    // Parsear el manifiesto si existe
+    const manifest = NodeUtils.parseManifest(
+      req.body.manifest,
+      uploadedFiles.length,
+    );
 
-    // Procesar el manifiesto si es válido
-    let manifest = null;
-    // Si el manifiesto es un string, intentar parsearlo
-    if (typeof req.body.manifest === "string") {
-      try {
-        const parsed = JSON.parse(req.body.manifest); // Parsear el JSON
-        // Si el manifiesto parseado es válido, usarlo
-        if (isUploadManifest(parsed)) {
-          manifest = parsed;
-        }
-      } catch (err) {
-        console.log(err);
-        // Si el parseo falla, tirar error de formato invalido
-        throw new AppError("INVALID_MANIFEST_FORMAT");
-      }
-    }
-
-    // Si hay manifiesto, verificar que la cantidad de manifiestos coincida con los archivos subidos
-    if (manifest && manifest.length !== uploadedFiles.length) {
-      throw new AppError("MANIFEST_MISMATCH_ERROR");
-    }
-
-    // ESTO SOLO APLICARA SI HAY MANIFIESTO
-    // Cacheamos los directorios ya creados o encontrados para evitar consultas repetidas
-    const dirCache = new Map<string, Node>();
-
-    // Cliente de prisma para la transacción
-    const prisma = DB.getClient();
-
-    // Procesar cada archivo subido
-    for (let i = 0; i < uploadedFiles.length; i++) {
-      // Si la subida fue abortada, tirar error para salir de la transacción y el ciclo
-      if (aborted) throw new AppError("UPLOAD_ABORTED");
-
-      // Obtener el archivo y su entrada en el manifiesto (si existe)
-      const file = uploadedFiles[i];
-      const fileManifest = manifest ? manifest[i] : null;
-
-      console.log(
-        `Node uploaded: ${file.filename} (${file.size.toString()} bytes)`,
-      );
-
-      // Procesar el nodo subido
-      const node = await prisma.$transaction(async (tx) => {
-        if (fileManifest) {
-          return await NodeService.processWithManifestTx(
-            tx,
-            file,
-            parentId ?? null,
-            fileManifest,
-            dirCache,
-          );
-        }
-
-        return await NodeService.processTx(tx, file, parentId ?? null);
-      });
-
-      if (node.parentId) {
-        await NodeService.incrementNodeSizeById(node.parentId, file.size);
-      }
-
-      // Si la subida fue abortada, tirar error para salir de la transacción y el ciclo
-      if (aborted) {
-        throw new AppError("UPLOAD_ABORTED");
-      }
-
-      // Almacenamos el resultado
-      results.push(node);
-    }
-
-    // Si la subida fue abortada, revertir los nodos creados, tanto en DB como en almacenamiento
-    if (aborted) {
-      await NodeService.rollback(results, uploadedFiles);
-    }
+    const results = await NodeService.processUploadedFiles(
+      uploadedFiles,
+      req.body.parentId ?? null,
+      manifest,
+      isAborted,
+    );
 
     // Adjuntar los nodos creados a la request para uso posterior
     req.nodes = results;
     next();
   } catch (err) {
     next(toAppError(err));
+  } finally {
+    cleanup();
   }
 };
 
