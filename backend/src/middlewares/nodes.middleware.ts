@@ -4,8 +4,7 @@ import { MulterError } from "multer";
 import { fromMulterFile } from "@/infra/upload/multer-file";
 import { multerUpload } from "@/infra/upload/multer.upload";
 import { NodeService } from "@/services/nodes/Node.service";
-import { AppError, NodeUtils, toAppError } from "@/utils";
-import { cleanupUploadedFiles } from "@/utils/fs/cleanupUploadedFiles";
+import { AppError, FsUtils, NodeUtils, toAppError } from "@/utils";
 
 /**
  * @description Middleware para manejar la subida de archivos
@@ -31,7 +30,7 @@ export const nodeUpload = (req: Request, res: Response, next: NextFunction) => {
     // writableEnded se usa para verificar si la respuesta ya fue enviada
     if (isAborted() && req.files && !res.writableEnded) {
       const files = req.files as Express.Multer.File[];
-      await cleanupUploadedFiles(files);
+      await FsUtils.cleanupUploadedFiles(files);
       return;
     }
 
