@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import path from "node:path";
 
 import { buildConflictRegex } from "@/domain/nodes/conflicts/buildConflictRegex";
@@ -5,12 +6,12 @@ import { getNextName } from "@/domain/nodes/conflicts/getNextName";
 import { computeNodeIdentity } from "@/domain/nodes/identity/computeNodeIdentity";
 import type {
   DirectoryNode,
+  DirectoryNodeLite,
   FileNode,
+  FileNodeLite,
   Node,
-  NodeLite,
 } from "@/domain/nodes/node";
 import type { UploadedFile } from "@/domain/uploads/uploaded-file";
-import { isDirectoryNode } from "@/infra/guards/node";
 import { isUploadedFile } from "@/infra/guards/uploaded-file";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
@@ -25,138 +26,89 @@ export class NodeIdentityService {
   private static readonly repo = NodeRepository;
 
   /**
-   * @description Resuelve la identidad única de un nodo (nombre y hash) dentro de su carpeta padre.
-   * @param node Nodo a resolver (puede ser un archivo subido o un nodo existente)
-   * @param parentId ID del nodo padre donde se ubicará el nodo
+   * @description Resuelve la identidad única de un directorio dentro de su carpeta padre, usando una transacción Prisma.
+   * @param tx Transacción Prisma
+   * @param node Nodo de directorio a resolver
+   * @param parentId ID del nodo padre donde se ubicará el directorio
    * @param params Parámetros adicionales (como un nuevo nombre propuesto)
-   * @returns Objeto con el nombre y hash resueltos
+   * @returns Objeto con el nombre, hash y UUID resueltos
    */
-  static async resolve(
-    node: UploadedFile | FileNode | DirectoryNode | NodeLite,
+  static async resolveNodeDirTx(
+    tx: PrismaTxClient,
+    node: DirectoryNode | DirectoryNodeLite,
     parentId: string | null,
     params: { newName?: string } = {},
   ) {
     try {
-      // Almacenamos la referencia al nombre original del nodo
-      const originalNodeName = isUploadedFile(node)
-        ? node.originalname
-        : params.newName || node.name;
-
-      // Ruta completa del nodo en el almacenamiento en la nube
-      const nodePath = isUploadedFile(node)
-        ? node.path
-        : path.resolve(await CloudStorageService.getCloudRootPath(), node.hash);
-
       // Nombre del nodo resuelto (inicialmente el original)
-      let nodeName = originalNodeName;
+      let nodeName = params.newName ?? node.name;
 
-      // Generamos el hash del nodo basado en su identidad unica
-      let nodeHash: string;
-      if (isDirectoryNode(node)) {
-        nodeHash = NodeUtils.genDirectoryHash(nodeName, parentId);
-      } else {
-        nodeHash = await NodeUtils.genFileHash(
-          nodePath,
-          computeNodeIdentity(nodeName, parentId).identityName,
-        );
-      }
-
-      // Buscamos si ya existe un nodo con el mismo hash en la carpeta destino
-      const conflict = await this.repo.findByHashAndParentId(
-        nodeHash,
+      // Buscamos si ya existe un nodo con el mismo nombre en la carpeta destino
+      const conflict = await this.repo.findByNameAndParentIdTx(
+        tx,
+        nodeName,
         parentId,
       );
 
-      // Si no hay conflicto, retornamos el nombre y hash resueltos
-      if (!conflict) {
-        return { nodeName, nodeHash };
-      }
-
-      // Si hay conflicto y pertenece a la misma carpeta padre, resolvemos un nuevo nombre
-      if (conflict.parentId === parentId) {
+      // Si hay conflicto, generamos un nuevo nombre único y actualizamos el nodo
+      if (conflict) {
         // Obtenemos los nombres que ya existen y que generan conflicto
-        const conflictingNames = await this.repo.findConflictingNames(
+        const conflictingNames = await this.repo.findConflictingNamesTx(
+          tx,
           parentId,
           buildConflictRegex(nodeName),
         );
 
         // Generamos un nuevo nombre unico en base a los nombres conflictivos
         nodeName = getNextName(nodeName, conflictingNames);
-
-        // Actualizar el nombre en el nodo original
-        if (isUploadedFile(node)) node.originalname = nodeName;
       }
 
-      // Generamos un nuevo hash basado en el nuevo nombre unico
-      if (isDirectoryNode(node)) {
-        nodeHash = NodeUtils.genDirectoryHash(nodeName, parentId);
-      } else {
-        nodeHash = await NodeUtils.genFileHash(
-          nodePath,
-          computeNodeIdentity(nodeName, parentId).identityName,
-        );
-      }
+      // Generamos el UUID y hash del nodo basado en su identidad unica
+      const nodeUUID = crypto.randomUUID();
+      const nodeHash = NodeUtils.genDirectoryHash(nodeUUID);
 
-      return { nodeName, nodeHash };
+      return { nodeName, nodeHash, nodeUUID };
     } catch (err) {
+      console.log("Error in resolveNodeDirTx:");
       console.log(err);
       throw new AppError("INTERNAL");
     }
   }
 
   /**
-   * @description Resuelve la identidad única de un nodo (nombre y hash) dentro de su carpeta padre, usando una transacción Prisma.
+   * @description Resuelve la identidad única de un archivo dentro de su carpeta padre, usando una transacción Prisma.
    * @param tx Transacción Prisma
-   * @param node Nodo a resolver (puede ser un archivo subido o un nodo existente)
-   * @param parentId ID del nodo padre donde se ubicará el nodo
+   * @param node Archivo subido o nodo de archivo a resolver
+   * @param parentId ID del nodo padre donde se ubicará el archivo
    * @param params Parámetros adicionales (como un nuevo nombre propuesto)
    * @returns Objeto con el nombre y hash resueltos
    */
-  static async resolveTx(
+  static async resolveNodeFileTx(
     tx: PrismaTxClient,
-    node: UploadedFile | FileNode | DirectoryNode | NodeLite,
+    node: UploadedFile | FileNode | FileNodeLite,
     parentId: string | null,
     params: { newName?: string } = {},
   ) {
     try {
-      // Almacenamos la referencia al nombre original del nodo
-      const originalNodeName = isUploadedFile(node)
-        ? node.originalname
-        : params.newName || node.name;
-
       // Ruta completa del nodo en el almacenamiento en la nube
       const nodePath = isUploadedFile(node)
         ? node.path
         : path.resolve(await CloudStorageService.getCloudRootPath(), node.hash);
 
       // Nombre del nodo resuelto (inicialmente el original)
-      let nodeName = originalNodeName;
+      let nodeName = isUploadedFile(node)
+        ? node.originalname
+        : params.newName || node.name;
 
-      // Generamos el hash del nodo basado en su identidad unica
-      let nodeHash: string;
-      if (isDirectoryNode(node)) {
-        nodeHash = NodeUtils.genDirectoryHash(nodeName, parentId);
-      } else {
-        nodeHash = await NodeUtils.genFileHash(
-          nodePath,
-          computeNodeIdentity(nodeName, parentId).identityName,
-        );
-      }
-
-      // Buscamos si ya existe un nodo con el mismo hash en la carpeta destino
-      const conflict = await this.repo.findByHashAndParentIdTx(
+      // Buscamos si ya existe un nodo con el mismo nombre en la carpeta destino
+      const conflict = await this.repo.findByNameAndParentIdTx(
         tx,
-        nodeHash,
+        nodeName,
         parentId,
       );
 
-      // Si no hay conflicto, retornamos el nombre y hash resueltos
-      if (!conflict) {
-        return { nodeName, nodeHash };
-      }
-
-      // Si hay conflicto y pertenece a la misma carpeta padre, resolvemos un nuevo nombre
-      if (conflict.parentId === parentId) {
+      // Si hay conflicto, generamos un nuevo nombre único y actualizamos el nodo
+      if (conflict) {
         // Obtenemos los nombres que ya existen y que generan conflicto
         const conflictingNames = await this.repo.findConflictingNamesTx(
           tx,
@@ -171,15 +123,11 @@ export class NodeIdentityService {
         if (isUploadedFile(node)) node.originalname = nodeName;
       }
 
-      // Generamos un nuevo hash basado en el nuevo nombre unico
-      if (isDirectoryNode(node)) {
-        nodeHash = NodeUtils.genDirectoryHash(nodeName, parentId);
-      } else {
-        nodeHash = await NodeUtils.genFileHash(
-          nodePath,
-          computeNodeIdentity(nodeName, parentId).identityName,
-        );
-      }
+      // Generamos el hash del nodo basado en su identidad unica
+      const nodeHash = await NodeUtils.genFileHash(
+        nodePath,
+        computeNodeIdentity(nodeName, parentId).identityName,
+      );
 
       return { nodeName, nodeHash };
     } catch (err) {

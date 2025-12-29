@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { DB } from "@/config/db";
 import type {
   DirectoryNode,
@@ -6,7 +8,7 @@ import type {
   NodeLite,
 } from "@/domain/nodes/node";
 import type { UploadedFile } from "@/domain/uploads/uploaded-file";
-import { isDirectoryNode } from "@/infra/guards/node";
+import { isDirectoryNode, isDirectoryNodeLite } from "@/infra/guards/node";
 import type { Prisma } from "@/infra/prisma/generated/client";
 import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
 import { NodeRepository } from "@/repositories/NodeRepository";
@@ -44,7 +46,7 @@ export class NodeService {
     try {
       // Resolver nombre y hash unicos - SI se dan condiciones de carrera,
       // persistTx no confiara en este resultado y iterara para conseguir uno unico
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
+      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
         tx,
         file,
         parentId,
@@ -95,7 +97,7 @@ export class NodeService {
       );
 
       // Resolver nombre y hash unicos para el archivo
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
+      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
         tx,
         file,
         newParentId,
@@ -218,13 +220,15 @@ export class NodeService {
         }
 
         // Preparamos los datos para crear el directorio
-        const hash = NodeUtils.genDirectoryHash(finalName, parentId);
+        const id = crypto.randomUUID() as string;
+        const hash = NodeUtils.genDirectoryHash(id);
         const mime = "inode/directory";
 
         // Tratamos de crear el directorio (nodo al fin)
 
         if (parentId) {
           const { hash: _h, ...node } = await this.repo.createTx(tx, {
+            id,
             name: finalName,
             hash,
             parent: { connect: { id: parentId } },
@@ -248,6 +252,7 @@ export class NodeService {
 
         // Crear el directorio sin padre (raiz)
         const { hash: _h, ...node } = await this.repo.createTx(tx, {
+          id,
           name: finalName,
           hash,
           parent: undefined,
@@ -276,19 +281,23 @@ export class NodeService {
     newName = NodeUtils.ensureNodeExt(newName, node);
 
     return await this.prisma.$transaction(async (tx) => {
-      // Resolver nombre y hash unicos
-      const { nodeName, nodeHash } = await this.identity.resolveTx(
-        tx,
-        node,
-        node.parentId,
-        { newName },
-      );
+      if (node.isDir) {
+        return await this.repo.updateNameByIdTx(tx, node.id, newName);
+      } else {
+        // Resolver nombre y hash unicos
+        const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
+          tx,
+          node,
+          node.parentId,
+          { newName },
+        );
 
-      // Actualizar el nodo en la base de datos
-      return await this.repo.updateIdentityByIdTx(tx, node.id, {
-        newName: nodeName,
-        newHash: nodeHash,
-      });
+        // Actualizar el nodo en la base de datos
+        return await this.repo.updateIdentityByIdTx(tx, node.id, {
+          newName: nodeName,
+          newHash: nodeHash,
+        });
+      }
     });
   }
 
@@ -360,7 +369,7 @@ export class NodeService {
   ): Promise<NodeLite | NodeLite[]> {
     try {
       // Copiar el nuevo nodo de forma física y añadir un nueva fila a la base de datos
-      if (isDirectoryNode(node)) {
+      if (isDirectoryNodeLite(node)) {
         return await NodeTreeService.copyNodeDir(node, parentId, {
           newName,
         });
