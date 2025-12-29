@@ -31,6 +31,7 @@ model Node {
     parent    Node?    @relation("ParentNode", fields: [parentId], references: [id])
     children  Node[]   @relation("ParentNode")
 
+    // OJO: Existe un índice único condicional para asegurar que no haya dos directorios con el mismo nombre bajo el mismo directorio padre.
     // Indice para optimizar consultas por parentId y hash
     // Agregue name al índice para maximo performance en las búsquedas por nombre globalmente
     @@index([parentId, name, hash])
