@@ -3,7 +3,6 @@ import { MulterError } from "multer";
 
 import { fromMulterFile } from "@/infra/upload/multer-file";
 import { multerUpload } from "@/infra/upload/multer.upload";
-import { CloudStorageService } from "@/services/cloud/CloudStorage.service";
 import { NodeService } from "@/services/nodes/Node.service";
 import { AppError, NodeUtils, toAppError } from "@/utils";
 import { cleanupUploadedFiles } from "@/utils/fs/cleanupUploadedFiles";
