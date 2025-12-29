@@ -45,36 +45,56 @@ export class NodeService {
     manifest: UploadManifestEntry[] | null,
     isAborted: () => boolean,
   ) {
+    // Array para almacenar los nodos procesados
     const results: Node[] = [];
-    const dirCache = new Map<string, Node>();
+    // Mapa para relacionar rutas de archivos con sus parentId correspondientes
+    let fileParentMap = new Map<string, string | null>();
 
+    // Si hay manifiesto, construir el árbol de directorios y obtener el mapa de padres a asignar a los archivos
+    if (manifest) {
+      fileParentMap = await NodeTreeService.buildDirectoryTreeFromManifest(
+        manifest,
+        parentId,
+      );
+    }
+
+    // Procesar cada archivo subido
     for (let i = 0; i < uploadedFiles.length; i++) {
       if (isAborted()) throw new AppError("UPLOAD_ABORTED");
 
+      // Obtener el archivo y la entrada del manifiesto correspondiente (si existe)
       const file = uploadedFiles[i];
-      const manifestEntry = manifest ? manifest[i] : null;
+      const manifestEntry = manifest?.[i] ?? null;
 
+      // Si hay manifiesto, debe haber una entrada correspondiente
+      // segun lo programado en el frontend seria raro que no haya,
+      // asi que lanzamos error por si acaso
+      if (manifest && !manifestEntry) {
+        throw new AppError("MANIFEST_MISMATCH_ERROR");
+      }
+
+      // Determinar el parentId correcto para este archivo
+      const fileParentId = manifestEntry
+        ? fileParentMap.get(manifestEntry.path)!
+        : parentId;
+
+      // Procesar el archivo dentro de una transacción
       const node = await this.prisma.$transaction(async (tx) => {
-        const node = manifestEntry
-          ? await this.processWithManifestTx(
-              tx,
-              file,
-              parentId,
-              manifestEntry,
-              dirCache,
-            )
-          : await this.processTx(tx, file, parentId);
+        // Procesar el archivo y persistir el nodo
+        const res = await this.processTx(tx, file, fileParentId);
 
-        if (node.parentId) {
-          await this.incrementNodeSizeByIdTx(tx, node.parentId, file.size);
+        // Si el nodo tiene padre, actualizar el tamaño de todos los ancestros
+        if (res.parentId) {
+          await this.incrementNodeSizeByIdTx(tx, res.parentId, file.size);
         }
 
-        return node;
+        return res;
       });
 
       results.push(node);
     }
 
+    // Devolver los nodos procesados
     return results;
   }
 
@@ -114,58 +134,6 @@ export class NodeService {
       return node;
     } catch (err) {
       console.log(err);
-      throw new AppError("INTERNAL", "Error al procesar el nodo");
-    }
-  }
-
-  /**
-   * @description Procesa un archivo subido usando una entrada de manifiesto para la ruta.
-   * @param tx PrismaTxClient
-   * @param file UploadedFile
-   * @param parentId ID del nodo padre donde se ubicará el nodo
-   * @param manifestEntry Entrada del manifiesto para el archivo
-   * @param dirCache Cache de directorios ya procesados
-   * @returns Nodo procesado
-   */
-  static async processWithManifestTx(
-    tx: PrismaTxClient,
-    file: UploadedFile,
-    parentId: string | null,
-    manifestEntry: UploadManifestEntry,
-    dirCache: Map<string, Node>,
-  ) {
-    try {
-      // Asegurar que la ruta de directorios del manifiesto exista - AHORA SAFE CONCURRENCY
-      const newParentId = await NodeTreeService.ensureManifestPathTree(
-        tx,
-        parentId,
-        manifestEntry,
-        dirCache,
-      );
-
-      // Resolver nombre y hash unicos para el archivo
-      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
-        tx,
-        file,
-        newParentId,
-      );
-
-      console.log(`Processing node: ${nodeName}`);
-
-      // Persistir el nodo en la base de datos
-      const node = await this.persistence.persistTx(
-        tx,
-        file,
-        newParentId,
-        nodeName,
-        nodeHash,
-      );
-
-      console.log(`Node processed: ${nodeName} as ${nodeHash}`);
-      return node;
-    } catch (err) {
-      console.error(err);
-      await this.cloud.delete(file.path); // Limpiar archivo temporal en caso de error
       throw new AppError("INTERNAL", "Error al procesar el nodo");
     }
   }
