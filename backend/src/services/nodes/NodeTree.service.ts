@@ -781,6 +781,34 @@ export class NodeTreeService {
     );
   }
 
+  static async buildDirectoryTreeFromManifest(
+    manifest: UploadManifestEntry[],
+    parentId: Node["id"] | null,
+  ) {
+    // Cache para directorios ya creados durante el procesamiento del manifiesto
+    const dirCache = new Map<string, Node>();
+    // Mapa para relacionar rutas de archivos con sus parentId correspondientes
+    const fileParentMap = new Map<string, string | null>();
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const entry of manifest) {
+        // Esta funcion recrea el arbol de directorios y devuelve el parentId a asignarle al archivo
+        const fileParentId = await this.ensureManifestPathTree(
+          tx,
+          parentId,
+          entry,
+          dirCache,
+        );
+
+        // Cachear el parentId para este archivo mediante su path
+        fileParentMap.set(entry.path, fileParentId);
+      }
+    });
+
+    // Retornar el mapa de archivos a parentId
+    return fileParentMap;
+  }
+
   /**
    * @description Asegura que la ruta de directorios para un manifiesto de subida exista, creando los directorios necesarios en la base de datos
    * @param tx Transacción de Prisma
