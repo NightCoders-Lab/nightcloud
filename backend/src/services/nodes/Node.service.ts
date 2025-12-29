@@ -32,6 +32,53 @@ export class NodeService {
   private static readonly prisma = DB.getClient();
 
   /**
+   * @description Procesa múltiples archivos subidos, resolviendo sus identidades y persistiendo los nodos.
+   * @param uploadedFiles Array de archivos subidos
+   * @param parentId ID del nodo padre donde se ubicarán los nodos
+   * @param manifest Manifiesto de subida (opcional)
+   * @param isAborted Función para verificar si la request fue abortada
+   * @returns Array de nodos procesados
+   */
+  static async processUploadedFiles(
+    uploadedFiles: UploadedFile[],
+    parentId: Node["id"] | null,
+    manifest: UploadManifestEntry[] | null,
+    isAborted: () => boolean,
+  ) {
+    const results: Node[] = [];
+    const dirCache = new Map<string, Node>();
+
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      if (isAborted()) throw new AppError("UPLOAD_ABORTED");
+
+      const file = uploadedFiles[i];
+      const manifestEntry = manifest ? manifest[i] : null;
+
+      const node = await this.prisma.$transaction(async (tx) => {
+        const node = manifestEntry
+          ? await this.processWithManifestTx(
+              tx,
+              file,
+              parentId,
+              manifestEntry,
+              dirCache,
+            )
+          : await this.processTx(tx, file, parentId);
+
+        if (node.parentId) {
+          await this.incrementNodeSizeByIdTx(tx, node.parentId, file.size);
+        }
+
+        return node;
+      });
+
+      results.push(node);
+    }
+
+    return results;
+  }
+
+  /**
    * @description Procesa un archivo subido, resolviendo su identidad y persistiendo el nodo.
    * @param tx PrismaTxClient
    * @param file UploadedFile
@@ -703,12 +750,18 @@ export class NodeService {
    * @param newSize Nuevo tamaño del nodo
    * @returns Nodo actualizado
    */
-  static async incrementNodeSizeById(
+  static async incrementNodeSizeByIdTx(
+    tx: PrismaTxClient,
     nodeId: Node["id"],
     newSize: bigint,
   ): Promise<Node> {
     // Propagar el cambio de tamaño a los ancestros
-    await this.repo.propagateSizeToAncestors(nodeId, newSize, "increment");
+    await this.repo.propagateSizeToAncestorsTx(
+      tx,
+      nodeId,
+      newSize,
+      "increment",
+    );
 
     // Retornamos el nodo actualizado, ya que sabemos que existe previamente le decimos a ts que no sera null
     return (await this.repo.findById(nodeId))!;
