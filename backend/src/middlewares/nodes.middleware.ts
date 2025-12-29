@@ -6,6 +6,7 @@ import { multerUpload } from "@/infra/upload/multer.upload";
 import { CloudStorageService } from "@/services/cloud/CloudStorage.service";
 import { NodeService } from "@/services/nodes/Node.service";
 import { AppError, NodeUtils, toAppError } from "@/utils";
+import { cleanupUploadedFiles } from "@/utils/fs/cleanupUploadedFiles";
 
 /**
  * @description Middleware para manejar la subida de archivos
@@ -15,53 +16,38 @@ import { AppError, NodeUtils, toAppError } from "@/utils";
  */
 export const nodeUpload = (req: Request, res: Response, next: NextFunction) => {
   // Configurar multer para manejar multiples archivos
-  const node = multerUpload.array(
+  const upload = multerUpload.array(
     process.env.FRONTEND_FORM_FIELD_NAME ?? "file", // Default form field name "file"
     Number(process.env.CLOUD_MAX_UPLOAD_FILES) || 10, // Max 10 files
   );
 
-  // Flag para detectar si la subida fue cancelada
-  let clientAborted = false;
-
-  // Función para manejar la cancelación
-  const onAbort = () => {
-    clientAborted = true;
-  };
-
-  // Escuchar el evento de abort
-  req.on("aborted", onAbort);
+  const { isAborted, cleanup } = NodeUtils.setupClientAbort(req);
 
   // Ejecutar el middleware de multer
-  node(req, res, async (err: unknown) => {
+  upload(req, res, async (err: unknown) => {
     // Remover el listener de abort ya que multer habra terminado a este punto
-    req.off("aborted", onAbort);
+    cleanup();
 
     // Si la subida fue cancelada por el cliente, eliminar los archivos subidos
     // writableEnded se usa para verificar si la respuesta ya fue enviada
-    if (clientAborted && req.files && !res.writableEnded) {
+    if (isAborted() && req.files && !res.writableEnded) {
       const files = req.files as Express.Multer.File[];
-
-      try {
-        await CloudStorageService.deleteFiles(files.map((f) => f.path));
-      } catch (err) {
-        console.error("Error deleting files after client abort:", err);
-      }
-
+      await cleanupUploadedFiles(files);
       return;
     }
 
     // Manejar errores de multer y otros errores
     if (err instanceof MulterError) {
-      return next(toAppError(err));
+      throw toAppError(err);
     }
 
     if (err instanceof AppError) {
-      return next(err);
+      throw err;
     }
 
     if (err) {
       console.error(err);
-      return next(new AppError("INTERNAL"));
+      throw new AppError("INTERNAL");
     }
 
     next();
