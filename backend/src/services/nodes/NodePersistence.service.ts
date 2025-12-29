@@ -5,6 +5,7 @@ import { computeNodeIdentity } from "@/domain/nodes/identity/computeNodeIdentity
 import type { UploadedFile } from "@/domain/uploads/uploaded-file";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
+import type { PendingMoves } from "@/types/upload";
 import { AppError, NodeUtils } from "@/utils";
 import { isPrismaUniqueError } from "@/utils/prisma";
 
@@ -23,6 +24,7 @@ export class NodePersistenceService {
     tx: PrismaTxClient,
     file: UploadedFile,
     parentId: string | null,
+    pendingMoves: PendingMoves[],
     initialNodeName: string,
     initialNodeHash: string,
   ) {
@@ -42,20 +44,14 @@ export class NodePersistenceService {
           isDir: false,
         });
 
-        // Ruta final en el almacenamiento en la nube
-        const finalPath = path.resolve(
-          await this.cloud.getCloudRootPath(),
-          nodeHash,
-        );
-
-        // Verificar si el archivo ya existe en el almacenamiento
-        if (await this.cloud.fileExists(finalPath)) {
-          // Eliminar el archivo temporal subido
-          await this.cloud.delete(file.path);
-        } else {
-          // Mover el archivo desde la ruta temporal a la ruta final en el almacenamiento
-          await this.cloud.move(file.path, finalPath);
-        }
+        // Una vez creado el nodo en la base de datos, marcamos el archivo para moverlo luego
+        pendingMoves.push({
+          tmpPath: file.path,
+          finalPath: path.resolve(
+            await this.cloud.getCloudRootPath(),
+            nodeHash,
+          ),
+        });
 
         return node;
       } catch (err) {

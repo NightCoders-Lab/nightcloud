@@ -595,7 +595,7 @@ export class NodeRepository {
   ): Promise<void> {
     // Obtener los ancestros del nodo
     const ancestors = await prisma.getAncestors(id);
-    console.log("Propagating size to ancestors:", ancestors);
+    // console.log("Propagating size to ancestors:", ancestors);
 
     // Actualizar el tamaño de cada ancestro
     await prisma.node.updateMany({
@@ -623,7 +623,7 @@ export class NodeRepository {
   ): Promise<void> {
     // Obtener los ancestros del nodo
     const ancestors = await tx.getAncestors(id);
-    console.log("Propagating size to ancestors:", ancestors);
+    // console.log("Propagating size to ancestors:", ancestors);
 
     // Actualizar el tamaño de cada ancestro
     await tx.node.updateMany({

@@ -17,7 +17,6 @@ import type { PrismaTxClient } from "@/types/prisma";
 import type { UploadManifestEntry } from "@/types/upload";
 import { AppError, NodeUtils } from "@/utils";
 import parseManifestPath from "@/utils/nodes/parseManifestPath";
-import { isPrismaUniqueError } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
 import { CloudStorageService } from "../cloud/CloudStorage.service";
@@ -898,29 +897,37 @@ export class NodeTreeService {
   ): Promise<Node | null> {
     const id = crypto.randomUUID() as string;
     const nodeHash = NodeUtils.genDirectoryHash(id);
-    const mime = "inode/directory";
 
-    try {
-      return await this.repo.createTx(tx, {
-        id,
-        name: dirName,
-        parent: parentId ? { connect: { id: parentId } } : undefined,
-        hash: nodeHash,
-        size: 0n,
-        isDir: true,
-        mime,
-      });
-    } catch (err) {
-      if (!isPrismaUniqueError(err)) throw err;
-
-      // Si hay un error de unicidad, significa que otro proceso creó el directorio al mismo tiempo
-      // Por lo que simplemente lo buscamos de nuevo
-      const existingDir = await this.repo.findByNameAndParentIdTx(
-        tx,
-        dirName,
-        parentId,
-      );
-      return existingDir;
+    if (parentId === null) {
+      const [dir] = await tx.$queryRaw<Node[]>`
+        INSERT INTO "node" (
+          id, "parentId", name, hash, size, mime, "isDir", "createdAt", "updatedAt"
+        )
+        VALUES (
+          ${id}::uuid, NULL, ${dirName}, ${nodeHash}, 0, 'inode/directory', true, now(), now()
+        )
+        ON CONFLICT (name)
+        WHERE "isDir" = true AND "parentId" IS NULL
+        DO UPDATE SET
+          name = EXCLUDED.name  -- no-op, pero permite RETURNING del row “conflict”
+        RETURNING *;
+      `;
+      return dir;
+    } else {
+      const dir = await tx.$queryRaw<Node[]>`
+  INSERT INTO "node" (
+    id, "parentId", name, hash, size, mime, "isDir", "createdAt", "updatedAt"
+  )
+  VALUES (
+    ${id}::uuid, ${parentId}::uuid, ${dirName}, ${nodeHash}, 0, 'inode/directory', true, now(), now()
+  )
+  ON CONFLICT ("parentId", name)
+  WHERE "isDir" = true AND "parentId" IS NOT NULL
+  DO UPDATE SET
+    name = EXCLUDED.name  -- no-op
+  RETURNING *;
+`;
+      return dir[0];
     }
   }
 }

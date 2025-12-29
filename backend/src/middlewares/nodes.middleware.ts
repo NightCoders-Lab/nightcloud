@@ -29,23 +29,27 @@ export const nodeUpload = (req: Request, res: Response, next: NextFunction) => {
     // Si la subida fue cancelada por el cliente, eliminar los archivos subidos
     // writableEnded se usa para verificar si la respuesta ya fue enviada
     if (isAborted() && req.files && !res.writableEnded) {
+      console.log("Upload aborted by client, cleaning up files...");
       const files = req.files as Express.Multer.File[];
       await FsUtils.cleanupUploadedFiles(files);
-      return;
+      req.uploadError = new AppError("UPLOAD_ABORTED");
+      return next();
     }
 
     // Manejar errores de multer y otros errores
     if (err instanceof MulterError) {
-      throw toAppError(err);
+      req.uploadError = toAppError(err);
+      return next();
     }
 
     if (err instanceof AppError) {
-      throw err;
+      return next(err);
     }
 
     if (err) {
-      console.error(err);
-      throw new AppError("INTERNAL");
+      console.log(err);
+      req.uploadError = new AppError("INTERNAL");
+      return next();
     }
 
     next();
@@ -97,6 +101,7 @@ export const nodeProcess = async (
     req.nodes = results;
     next();
   } catch (err) {
+    console.log(err);
     next(toAppError(err));
   } finally {
     cleanup();

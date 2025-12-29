@@ -150,6 +150,7 @@ export class NodeController {
       await NodeService.deleteNode(node);
       res.success(undefined, 204);
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else throw new AppError("INTERNAL", "Error al eliminar el nodo");
     }

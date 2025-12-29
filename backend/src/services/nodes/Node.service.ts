@@ -13,8 +13,9 @@ import type { Prisma } from "@/infra/prisma/generated/client";
 import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
-import type { UploadManifestEntry } from "@/types/upload";
+import type { PendingMoves, UploadManifestEntry } from "@/types/upload";
 import { AppError, NodeUtils } from "@/utils";
+import { withDeadlockRetry } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
 import { NodePersistenceService } from "./NodePersistence.service";
@@ -46,56 +47,80 @@ export class NodeService {
     isAborted: () => boolean,
   ) {
     // Array para almacenar los nodos procesados
-    const results: Node[] = [];
-    // Mapa para relacionar rutas de archivos con sus parentId correspondientes
-    let fileParentMap = new Map<string, string | null>();
+    let finalResults: Node[] = [];
+    // Array para almacenar las operaciones finales de movimiento pendientes que se haran despues de procesar
+    let finalPendingMoves: PendingMoves[] = [];
 
-    // Si hay manifiesto, construir el árbol de directorios y obtener el mapa de padres a asignar a los archivos
-    if (manifest) {
-      fileParentMap = await NodeTreeService.buildDirectoryTreeFromManifest(
-        manifest,
-        parentId,
-      );
-    }
+    await withDeadlockRetry(async () => {
+      // Array para almacenar las operaciones de movimiento pendientes de este intento
+      // Si este intento entra en deadlock no llegara al final y no se usaran estos movimientos
+      const attemptMoves: PendingMoves[] = [];
+      // Lo mismo con el mapa de parentId para este intento
+      const attemptFileParentMap = manifest
+        ? await NodeTreeService.buildDirectoryTreeFromManifest(
+            manifest,
+            parentId,
+          )
+        : null;
+      // Lo mismo tmb para los resultados de este intento
+      const attemptResults: Node[] = [];
 
-    // Procesar cada archivo subido
-    for (let i = 0; i < uploadedFiles.length; i++) {
-      if (isAborted()) throw new AppError("UPLOAD_ABORTED");
+      // Procesar cada archivo subido
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        if (isAborted()) throw new AppError("UPLOAD_ABORTED");
 
-      // Obtener el archivo y la entrada del manifiesto correspondiente (si existe)
-      const file = uploadedFiles[i];
-      const manifestEntry = manifest?.[i] ?? null;
+        // Obtener el archivo y la entrada del manifiesto correspondiente (si existe)
+        const file = uploadedFiles[i];
+        const manifestEntry = manifest?.[i] ?? null;
 
-      // Si hay manifiesto, debe haber una entrada correspondiente
-      // segun lo programado en el frontend seria raro que no haya,
-      // asi que lanzamos error por si acaso
-      if (manifest && !manifestEntry) {
-        throw new AppError("MANIFEST_MISMATCH_ERROR");
-      }
-
-      // Determinar el parentId correcto para este archivo
-      const fileParentId = manifestEntry
-        ? fileParentMap.get(manifestEntry.path)!
-        : parentId;
-
-      // Procesar el archivo dentro de una transacción
-      const node = await this.prisma.$transaction(async (tx) => {
-        // Procesar el archivo y persistir el nodo
-        const res = await this.processTx(tx, file, fileParentId);
-
-        // Si el nodo tiene padre, actualizar el tamaño de todos los ancestros
-        if (res.parentId) {
-          await this.incrementNodeSizeByIdTx(tx, res.parentId, file.size);
+        // Si hay manifiesto, debe haber una entrada correspondiente
+        // segun lo programado en el frontend seria raro que no haya,
+        // asi que lanzamos error por si acaso
+        if (manifest && !manifestEntry) {
+          throw new AppError("MANIFEST_MISMATCH_ERROR");
         }
 
-        return res;
-      });
+        // Determinar el parentId correcto para este archivo
+        const fileParentId = manifestEntry
+          ? attemptFileParentMap!.get(manifestEntry.path)!
+          : parentId;
 
-      results.push(node);
+        // Procesar el archivo dentro de una transacción
+        const node = await this.prisma.$transaction(async (tx) => {
+          return await this.processTx(tx, file, fileParentId, attemptMoves);
+        });
+
+        // Si el nodo tiene padre, actualizar el tamaño de todos los ancestros
+        if (node.parentId) {
+          await this.incrementNodeSizeById(node.parentId, file.size);
+        }
+
+        attemptResults.push(node);
+      }
+
+      // Si salió bien (0 deadlock), asignar los movimientos pendientes de este intento a los finales
+      finalPendingMoves = attemptMoves;
+      // Asignar los resultados de este intento a los finales
+      finalResults = attemptResults;
+    });
+
+    // Realizar los movimientos de archivos pendientes
+    for (const { tmpPath, finalPath } of finalPendingMoves) {
+      if (!(await this.cloud.fileExists(tmpPath))) {
+        continue;
+      }
+
+      // Si el archivo ya existe en la ubicación final, eliminar el temporal
+      if (await this.cloud.fileExists(finalPath)) {
+        await this.cloud.delete(tmpPath);
+      } else {
+        // Si no existe, mover el archivo desde la ubicación temporal a la final
+        await this.cloud.move(tmpPath, finalPath);
+      }
     }
 
     // Devolver los nodos procesados
-    return results;
+    return finalResults;
   }
 
   /**
@@ -109,6 +134,7 @@ export class NodeService {
     tx: PrismaTxClient,
     file: UploadedFile,
     parentId: Node["id"] | null,
+    pendingMoves: PendingMoves[],
   ) {
     try {
       // Resolver nombre y hash unicos - SI se dan condiciones de carrera,
@@ -126,6 +152,7 @@ export class NodeService {
         tx,
         file,
         parentId,
+        pendingMoves,
         nodeName,
         nodeHash,
       );
@@ -549,6 +576,7 @@ export class NodeService {
         await this.repo.deleteByIdTx(tx, node.id);
       });
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else throw new AppError("INTERNAL", "Error al eliminar el nodo");
     }
@@ -668,6 +696,7 @@ export class NodeService {
         );
       });
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else throw new AppError("INTERNAL", "Error al eliminar el nodo");
     }
@@ -710,6 +739,17 @@ export class NodeService {
     if (dirNodes.length > 0) {
       await this.bulkDeleteDirectories(dirNodes);
     }
+  }
+
+  static async incrementNodeSizeById(
+    nodeId: Node["id"],
+    newSize: bigint,
+  ): Promise<Node> {
+    // Propagar el cambio de tamaño a los ancestros
+    await this.repo.propagateSizeToAncestors(nodeId, newSize, "increment");
+
+    // Retornamos el nodo actualizado, ya que sabemos que existe previamente le decimos a ts que no sera null
+    return (await this.repo.findById(nodeId))!;
   }
 
   /**
