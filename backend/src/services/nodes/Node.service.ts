@@ -1,4 +1,5 @@
 import { DB } from "@/config/db";
+import type { Blob } from "@/domain/blobs/blob";
 import type {
   DirectoryNode,
   FileNode,
@@ -10,6 +11,7 @@ import type { UploadedFile } from "@/domain/uploads/uploaded-file";
 import { isDirectoryNode, isDirectoryNodeLite } from "@/infra/guards/node";
 import type { Prisma } from "@/infra/prisma/generated/client";
 import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
+import { BlobRepository } from "@/repositories/BlobRepository";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
 import type { PendingMoves, UploadManifestEntry } from "@/types/upload";
@@ -39,6 +41,9 @@ export class NodeService {
   }
   private static get prisma() {
     return DB.getClient();
+  }
+  private static get blobRepo() {
+    return BlobRepository;
   }
 
   /**
@@ -101,11 +106,25 @@ export class NodeService {
           ? attemptFileParentMap!.get(manifestEntry.path)!
           : nodeParentId;
 
+        // Calcular el hash del blob y el key de almacenamiento
+        const { blobHash, storageKey } = await BlobUtils.computeBlobIdentifiers(
+          file.path,
+        );
+
+        // Primero aseguramos el blob en la base de datos
+        const blob = await this.blobRepo.ensureBlob({
+          hash: blobHash,
+          size: BigInt(file.size),
+          mime: file.mimetype,
+          storageKey: storageKey,
+        });
+
         // Procesar el archivo dentro de una transacción
         const node = await this.prisma.$transaction(async (tx) => {
           return await this.processTx(
             tx,
             file,
+            blob,
             rootId,
             fileParentId,
             attemptMoves,
@@ -158,9 +177,10 @@ export class NodeService {
   }
 
   /**
-   * @description Procesa un solo archivo subido, resolviendo su identidad y persistiendo el nodo.
+   * @description Procesa un solo archivo dentro de una transacción.
    * @param tx Transacción Prisma
    * @param file Archivo subido
+   * @param blob Blob asociado al archivo
    * @param rootId ID del nodo raíz
    * @param parentId ID del nodo padre
    * @param pendingMoves Arreglo para registrar movimientos pendientes de archivos
@@ -169,32 +189,23 @@ export class NodeService {
   static async processTx(
     tx: PrismaTxClient,
     file: UploadedFile,
+    blob: Blob,
     rootId: Node["rootId"],
     parentId: string,
     pendingMoves: PendingMoves[],
   ) {
     try {
-      // Calcular el hash del blob y el key de almacenamiento
-      const { blobHash, storageKey } = await BlobUtils.computeBlobIdentifiers(
-        file.path,
-      );
-      // Generar un nombre de nodo único
-      const nodeName = await this.identity.resolveNameTx(tx, file, parentId);
-
-      console.log(`Processing node: ${nodeName}`);
-
       // Persistir el nodo en la base de datos
-      const node = await this.persistence.persistTx(
+      const node = await this.persistence.persistTx({
         tx,
         file,
+        blob,
         rootId,
         parentId,
         pendingMoves,
-        { blobHash, storageKey },
-        nodeName,
-      );
+        initialNodeName: file.originalname,
+      });
 
-      console.log(`Node processed: ${nodeName}`);
       return node;
     } catch (err) {
       console.log(err);

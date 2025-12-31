@@ -70,6 +70,15 @@ export const toAncestorDTO = (n: AncestorPicked): AncestorDTO => ({
   depth: n.depth,
 });
 
+/**
+ * @description Mapea una lista de nodos de dominio a una lista de AncestorDTO.
+ * @param nodes Lista de nodos de dominio a mapear
+ * @returns Lista de AncestorDTO mapeados
+ */
+export const toAncestorDTOList = (nodes: AncestorPicked[]): AncestorDTO[] => {
+  return nodes.filter((n) => n.rootId !== n.id).map(toAncestorDTO);
+};
+
 // Mismo mapeo que AncestorDTO, si cambia en el futuro se puede modificar aqui
 /**
  * @description Mapea un nodo de dominio a un DescendantDTO.

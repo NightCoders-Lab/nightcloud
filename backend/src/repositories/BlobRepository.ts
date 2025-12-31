@@ -1,7 +1,8 @@
 import { DB } from "@/config/db";
 import type { Blob } from "@/domain/blobs/blob";
 import { fromPrismaBlob } from "@/infra/mappers/blob.mapper";
-import type { PrismaBlobCreateInput, PrismaTxClient } from "@/types/prisma";
+import type { PrismaBlobCreateInput } from "@/types/prisma";
+import { isPrismaUniqueError } from "@/utils/prisma";
 
 export class BlobRepository {
   private static readonly prisma = DB.getClient();
@@ -25,21 +26,102 @@ export class BlobRepository {
   }
 
   /**
-   * @description Crea o actualiza un blob
-   * @param tx Transacción Prisma
-   * @param data Datos para crear o actualizar el blob
-   * @returns Blob creado o actualizado
+   * @description Asegura que un blob con el hash dado exista en la base de datos.
+   * @param data Datos del blob a asegurar
+   * @returns Blob existente o creado
    */
-  static async upsertTx(
-    tx: PrismaTxClient,
-    data: PrismaBlobCreateInput,
-  ): Promise<Blob> {
-    const res = await tx.blob.upsert({
+  static async ensureBlob(data: {
+    hash: string;
+    size: bigint;
+    mime: string;
+    storageKey: string;
+  }): Promise<Blob> {
+    let attempts = 0;
+    const maxRetries = 3;
+
+    while (true) {
+      try {
+        return await this.tryUpsert(data);
+      } catch (err) {
+        attempts++;
+
+        // Si es error de unicidad, el blob YA existe. Lo buscamos y retornamos.
+        // Esto es más rápido que reintentar el upsert.
+        const existing = await this.recoverFromUniqueError(err, data.hash);
+        if (existing) return existing;
+
+        // Validamos si debemos reintentar o lanzar el error
+        this.validateRetry(err, attempts, maxRetries);
+
+        // Si fue un Deadlock, esperamos un poco (Backoff)
+        // Espera aleatoria entre 50ms y 200ms para desincronizar los hilos que chocaron
+        const delay = Math.floor(Math.random() * 150) + 50;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  private static async tryUpsert(data: {
+    hash: string;
+    size: bigint;
+    mime: string;
+    storageKey: string;
+  }): Promise<Blob> {
+    return await this.prisma.blob.upsert({
       where: { hash: data.hash },
-      create: data,
-      update: {},
+      create: {
+        hash: data.hash,
+        size: data.size,
+        mime: data.mime,
+        storageKey: data.storageKey,
+      },
+      update: {}, // No hacemos nada si ya existe
     });
-    return fromPrismaBlob(res);
+  }
+
+  /**
+   * @description Intenta recuperar un blob existente en caso de error de unicidad.
+   * @param err Error ocurrido durante la operación
+   * @param hash Hash del blob a buscar
+   * @returns Blob existente o null si no existe
+   */
+  private static async recoverFromUniqueError(
+    err: unknown,
+    hash: string,
+  ): Promise<Blob | null> {
+    if (isPrismaUniqueError(err)) {
+      return await this.prisma.blob.findUnique({
+        where: { hash },
+      });
+    }
+    return null;
+  }
+
+  /**
+   * @description Valida si se debe reintentar la operación en caso de error.
+   * @param err Error ocurrido durante la operación
+   * @param attempts Número de intentos realizados
+   * @param maxRetries Número máximo de reintentos permitidos
+   */
+  private static async validateRetry(
+    err: unknown,
+    attempts: number,
+    maxRetries: number,
+  ): Promise<void> {
+    // Verificamos si es un error de deadlock
+    const isDeadlock =
+      (err as NodeJS.ErrnoException).code === "P2034" ||
+      (err as NodeJS.ErrnoException).message?.includes("deadlock");
+
+    // Si no es un error de deadlock, lanzamos el error
+    if (!isDeadlock) {
+      throw err;
+    }
+
+    // Si llegamos al límite de intentos, lanzamos el error
+    if (attempts >= maxRetries) {
+      throw err;
+    }
   }
 
   /**
