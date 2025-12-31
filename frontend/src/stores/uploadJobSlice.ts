@@ -179,12 +179,21 @@ export const createUploadJobSlice: StateCreator<UploadJobSliceType> = (
   },
 
   cancelAll: () => {
+    const { active, queue, cancelled } = get();
     // Abortar todas las subidas activas
-    get().active.forEach((job) => job.controller?.abort());
+    active.forEach((job) => job.controller?.abort());
+
+    // Crear una lista combinada de trabajos cancelados
+    const newCancelledItems = [
+      ...active.map((j) => ({ ...j, status: "cancelled" as const })),
+      ...queue.map((j) => ({ ...j, status: "cancelled" as const })),
+    ];
+
     // Limpiar la cola y la lista de activos
     set(() => ({
       queue: [],
       active: [],
+      cancelled: [...cancelled, ...newCancelledItems],
     }));
   },
 

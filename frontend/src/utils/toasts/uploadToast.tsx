@@ -78,3 +78,18 @@ export function errorUploadToast(toastId: Id) {
     autoClose: 5000,
   });
 }
+
+/**
+ * @description Muestra un toast de advertencia durante la subida
+ * @param toastId ID del toast a actualizar
+ * @param message Mensaje de advertencia a mostrar
+ */
+export function warningUploadToast(toastId: Id, message: string) {
+  toast.update(toastId, {
+    render: message,
+    type: "warning",
+    isLoading: false,
+    autoClose: 5000,
+    progress: undefined,
+  });
+}
