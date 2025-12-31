@@ -123,9 +123,7 @@ AS $function$
 $function$;
 
 -- ============================================================
--- 4. BULK ANCESTORS (Multiple)
--- Sin DISTINCT: Permite que un padre aparezca múltiples veces
--- si es ancestro de varios nodos de inicio (vital para sumar pesos).
+-- BULK ANCESTORS (Multiple)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_ancestors_bulk(start_node_ids uuid[])
 RETURNS TABLE(
@@ -176,14 +174,14 @@ WITH RECURSIVE ancestors AS (
   FROM "node" n
   JOIN ancestors a ON n."id" = a."parentId"
 )
-SELECT
+SELECT DISTINCT ON (id)
   id, "parentId", name, "blobId", size, mime, "isDir", depth, "rootId", "startNodeId"
 FROM ancestors
-ORDER BY depth, "startNodeId";
+ORDER BY id, depth, "startNodeId";
 $function$;
 
 -- ============================================================
--- 5. BULK DESCENDANTS (Multiple)
+-- BULK DESCENDANTS (Multiple)
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_descendants_bulk(start_node_ids uuid[])
 RETURNS TABLE(
@@ -232,8 +230,8 @@ WITH RECURSIVE descendants AS (
   FROM "node" n
   JOIN descendants d ON n."parentId" = d."id"
 )
-SELECT
+SELECT DISTINCT ON (id)
   id, "parentId", name, "blobId", size, mime, "isDir", depth, "rootId", "startNodeId"
 FROM descendants
-ORDER BY depth, "startNodeId";
+ORDER BY id, depth, "startNodeId";
 $function$;
