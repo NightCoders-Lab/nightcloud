@@ -10,15 +10,10 @@ export default function buildBreadcrumbs(
   startNodeId: NodeType["id"],
   nodes: AncestorType[]
 ): Readonly<AncestorType[]> {
-  console.log("Building breadcrumbs for node ID:", startNodeId);
-  console.log("Available nodes:", nodes);
-
   // Crear un mapa de nodos para acceso rápido
   const map = Object.fromEntries(
     nodes.filter((n) => n.isDir).map((n) => [n.id, n])
   );
-
-  console.log("Map of nodes:", map);
 
   // Construir la ruta de los breadcrumbs
   const path = [];
@@ -29,8 +24,6 @@ export default function buildBreadcrumbs(
     path.unshift(node);
     node = map[node.parentId ?? ""];
   }
-
-  console.log(path);
 
   // Retornar la ruta construida
   return path;

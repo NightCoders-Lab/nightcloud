@@ -21,9 +21,6 @@ export function useExplorerInitialization(
     // Si ya se ha inicializado, no hacer nada
     if (hasInitializedRef.current) return;
 
-    console.log("useExplorerInitialization - rootParentId:", rootParentId);
-    console.log("useExplorerInitialization - nodeData:", nodeData);
-
     // Si hay rootParentId, esperar a que nodeData esté disponible
     if (rootParentId) {
       // Si no hay nodeData, no hacer nada

@@ -30,7 +30,7 @@ export function updateUploadToast(
         <span>Uploading… {percent}%</span>
         <button
           onClick={onCancel}
-          className="text-sm uppercas text-red-300 bg-red-900/30 hover:bg-red-900/50 hover:text-red-200 transition-colors duration-150 cursor-pointer p-2 rounded-md"
+          className="text-sm uppercase text-red-300 bg-red-900/30 hover:bg-red-900/50 hover:text-red-200 transition-colors duration-150 cursor-pointer p-2 rounded-md"
         >
           Cancel
         </button>

@@ -114,7 +114,6 @@ export function useExplorer() {
 
     // Si ya está seleccionada, deseleccionarla seleccionando la carpeta actual siempre
     if (selectedFolderId === id) {
-      console.log("Deseleccionando carpeta, seleccionando la actual en su lugar");
       selectFolder(fallbackId);
       return;
     }

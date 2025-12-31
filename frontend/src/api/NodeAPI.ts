@@ -315,7 +315,6 @@ export async function moveNode(
     const apiRes = nodesOrNodeLiteSchema.safeParse(validateApiRes(data).data);
 
     if (apiRes.success) {
-      console.log(apiRes.data);
       return apiRes.data;
     } else {
       throw new Error("Error al mover el nodo");
