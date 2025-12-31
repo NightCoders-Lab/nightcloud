@@ -23,6 +23,7 @@ import { useUploadQuerySync } from "@/hooks/upload/useUploadQuerySync";
 import { useUploadInvalidateQueries } from "@/hooks/upload/useUploadInvalidateQueries";
 import { useUploadToast } from "@/hooks/upload/useUploadToast";
 import { useSearch } from "@/hooks/search/useSearch";
+import { useSearchCleanup } from "@/hooks/search/useSearchCleanup";
 
 export default function AppLayout() {
   const location = useLocation();
@@ -49,10 +50,6 @@ export default function AppLayout() {
     setTimeout(() => {
       setSelectedNodes([]);
     }, 300);
-    // También limpiar resultados de búsqueda al cambiar de ruta
-    setSearchResults([]);
-    // Limpiar la consulta de búsqueda al cambiar de ruta
-    setSearchQuery("");
   }, [params, setSelectedNodes, scope, setSearchResults, setSearchQuery]);
 
   // Configurar sensores para el drag and drop
@@ -63,6 +60,9 @@ export default function AppLayout() {
       },
     })
   );
+
+  // Limpiar resultados de búsqueda al cambiar de ruta
+  useSearchCleanup();
 
   // Sistema de subida de archivos
   useUploadScheduler(); // Iniciar el scheduler de subidas
