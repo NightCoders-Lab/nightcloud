@@ -14,27 +14,73 @@ datasource db {
 }
 
 /**
- * Modelo que representa un nodo en el sistema de archivos.
- * Puede ser un archivo o un directorio.
+ * Modelo que representa una entidad logica en el sistema de archivos.
+ * Puede ser un archivo o un directorio. Los archivos estan vinculados a
+ * una entidad fisica (BLOB) que contiene los datos reales de este.
  */
 model Node {
-    // Campos del modelo
-    id        String   @id @default(uuid()) @db.Uuid
-    parentId  String?  @db.Uuid
-    name      String
-    hash      String   @unique
-    size      BigInt
-    mime      String
-    isDir     Boolean  @default(false)
+    // Identificadores
+    id       String  @id @default(uuid()) @db.Uuid
+    parentId String? @db.Uuid
+
+    // Raiz del usuario al que pertenece este nodo
+    rootId String @db.Uuid
+
+    // Enlace fisico al blob (archivo)
+    blobId String? @db.Uuid
+
+    // Nombre del nodo (archivo o directorio)
+    name String
+
+    // Metadatos
+    size  BigInt  @default(0) // El blob lo tiene, pero lo duplicamos aqui para optimizar consultas
+    mime  String // El blob lo tiene, pero lo duplicamos aqui para optimizar consultas
+    isDir Boolean @default(false)
+
+    // Timestamps
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
-    parent    Node?    @relation("ParentNode", fields: [parentId], references: [id])
-    children  Node[]   @relation("ParentNode")
+
+    // Relaciones
+    parent   Node?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+    children Node[] @relation("FolderTree")
+    blob     Blob?  @relation(fields: [blobId], references: [id])
 
     // OJO: Existe un índice único condicional para asegurar que no haya dos directorios con el mismo nombre bajo el mismo directorio padre.
-    // Indice para optimizar consultas por parentId y hash
+    // Esto permite nombres duplicados en diferentes directorios, pero no en el mismo.
     // Agregue name al índice para maximo performance en las búsquedas por nombre globalmente
-    @@index([parentId, name, hash])
+    @@unique([parentId, name], map: "unique_parent_name")
+    @@index([rootId, parentId, name])
     // Remapeo de la tabla a "node"
     @@map("node")
+}
+
+// Modelo que representa la entidad fisica de un nodo (solo archivos)
+model Blob {
+    // Identificadores
+    id   String @id @default(uuid()) @db.Uuid
+    hash String @unique
+
+    // Metadatos
+    size BigInt
+    mime String
+
+    // Path fisico y tipo de almacenamiento
+    storageKey  String
+    storageType StorageType @default(LOCAL)
+
+    // Relaciones
+    nodes Node[]
+
+    // Timestamps
+    createdAt DateTime @default(now())
+
+    // Remapeo de la tabla a "blob"
+    @@map("blob")
+}
+
+// Tipo de almacenamiento para los blobs
+enum StorageType {
+    LOCAL // Por ahora local-first
+    S3 // En un futuro S3 u otro almacenamiento en la nube
 }

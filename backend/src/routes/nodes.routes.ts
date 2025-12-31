@@ -8,6 +8,7 @@ import {
   validateRequest,
 } from "@/middlewares";
 import {
+  nodeParentExists,
   nodeParseBulkIds,
   nodesExistBulk,
 } from "@/middlewares/nodes.middleware";
@@ -24,6 +25,7 @@ router.post(
   NodeValidators.nodeParentIdValidator,
   validateRequest,
   nodeUpload,
+  nodeParentExists(),
   nodeProcess,
   NodeController.uploadNodes,
 );
@@ -57,7 +59,7 @@ router.post(
   nodeParseBulkIds,
   NodeValidators.nodeIdsValidator,
   validateRequest,
-  nodesExistBulk,
+  nodesExistBulk({ includeBlob: true }),
   NodeController.bulkDownloadNodes,
 );
 
@@ -66,7 +68,7 @@ router.post(
   "/bulk/copy",
   NodeValidators.nodeBulkCopyValidator,
   validateRequest,
-  nodesExistBulk,
+  nodesExistBulk(),
   NodeController.bulkCopyNodes,
 );
 
@@ -75,7 +77,7 @@ router.post(
   "/bulk/move",
   NodeValidators.nodeBulkMoveValidator,
   validateRequest,
-  nodesExistBulk,
+  nodesExistBulk(),
   NodeController.bulkMoveNodes,
 );
 
@@ -84,7 +86,7 @@ router.post(
   "/bulk/delete",
   NodeValidators.nodeBulkDeleteValidator,
   validateRequest,
-  nodesExistBulk,
+  nodesExistBulk(),
   NodeController.bulkDeleteNodes,
 );
 
@@ -97,7 +99,7 @@ router.get(
   "/download/:nodeId",
   NodeValidators.nodeIdValidator, // Validation chain
   validateRequest, // Validate any errors from express-validator
-  nodeExists,
+  nodeExists({ includeBlob: true }),
   NodeController.downloadNode,
 );
 
@@ -106,7 +108,7 @@ router.get(
   "/:nodeId/ancestors",
   NodeValidators.nodeIdValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.getNodeAncestors,
 );
 
@@ -115,7 +117,7 @@ router.get(
   "/:nodeId/descendants",
   NodeValidators.nodeIdValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.getNodeDescendants,
 );
 
@@ -124,7 +126,7 @@ router.patch(
   "/:nodeId/rename",
   NodeValidators.nodeNewNameValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.renameNode,
 );
 
@@ -133,7 +135,7 @@ router.post(
   "/:nodeId/copy",
   NodeValidators.nodeCopyValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.copyNode,
 );
 
@@ -142,7 +144,7 @@ router.post(
   "/:nodeId/move",
   NodeValidators.nodeMoveValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.moveNode,
 );
 
@@ -151,7 +153,7 @@ router.get(
   "/:nodeId/details",
   NodeValidators.nodeCopyValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.getNodeDetails,
 );
 
@@ -160,7 +162,7 @@ router.get(
   "/:nodeId",
   NodeValidators.nodeIdValidator, // Validation chain
   validateRequest, // Validate any errors from express-validator
-  nodeExists,
+  nodeExists(),
   NodeController.getNodesFromDirectory,
 );
 
@@ -169,7 +171,7 @@ router.delete(
   "/:nodeId",
   NodeValidators.nodeIdValidator, // Validation chain
   validateRequest, // Validate any errors from express-validator
-  nodeExists,
+  nodeExists(),
   NodeController.deleteNode,
 );
 
