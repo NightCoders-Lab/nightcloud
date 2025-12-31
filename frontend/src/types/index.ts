@@ -33,6 +33,7 @@ export const apiResponseSchema = z.object({
 export const ancestorSchema = z.object({
   id: z.uuidv4(),
   parentId: z.uuid().nullable(),
+  rootId: z.uuid(),
   name: z.string().min(1).max(250),
   size: z.string(),
   mime: z.string(),
@@ -50,7 +51,9 @@ export const descendantSchema = ancestorSchema;
 export const descendantsSchema = z.array(descendantSchema);
 
 // Schema para un nodo lite (sin timestamps)
-export const nodeLiteSchema = ancestorSchema.omit({ depth: true });
+export const nodeLiteSchema = ancestorSchema.omit({
+  depth: true,
+});
 
 // Schema para una lista de nodos lite
 export const nodesLiteSchema = z.array(nodeLiteSchema);
