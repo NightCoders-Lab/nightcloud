@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 
 import { GLOBAL_ROOT_ID } from "@/config/constants";
 import {
-  toAncestorDTO,
+  toAncestorDTOList,
   toDescendantDTO,
   toNodeDTO,
   toNodeLiteDTO,
@@ -108,7 +108,7 @@ export class NodeController {
 
     try {
       const ancestors = await NodeService.getNodeAncestors(node.id);
-      res.success(ancestors.map((n) => toAncestorDTO(n)));
+      res.success(toAncestorDTOList(ancestors));
     } catch (err) {
       if (err instanceof AppError) throw err;
       else
@@ -124,7 +124,7 @@ export class NodeController {
     const node = req.node!;
 
     try {
-      const descendants = await NodeService.getNodeAncestors(node.id);
+      const descendants = await NodeService.getNodeDescendants(node.id);
       res.success(descendants.map((n) => toDescendantDTO(n)));
     } catch (err) {
       if (err instanceof AppError) throw err;
