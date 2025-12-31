@@ -16,6 +16,7 @@ import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
 import type { PendingMoves, UploadManifestEntry } from "@/types/upload";
 import { AppError, BlobUtils, NodeUtils } from "@/utils";
+import { sanitizeSearchQuery } from "@/utils/nodes/sanitizeSearchQuery";
 import { withDeadlockRetry } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
@@ -480,7 +481,11 @@ export class NodeService {
     nameQuery: string,
     limit: number = 20,
   ) {
-    return await this.repo.search(rootId, parentId, nameQuery, limit);
+    // Sanitizar la consulta de búsqueda
+    const sanitizedQuery = sanitizeSearchQuery(nameQuery);
+
+    // Realizar la búsqueda en el repositorio
+    return await this.repo.search(rootId, parentId, sanitizedQuery, limit);
   }
 
   /**
