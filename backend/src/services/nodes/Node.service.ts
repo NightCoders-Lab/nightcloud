@@ -477,7 +477,7 @@ export class NodeService {
    */
   static async searchNodesByName(
     rootId: Node["rootId"],
-    parentId: string,
+    parentId: Node["parentId"],
     nameQuery: string,
     limit: number = 20,
   ) {

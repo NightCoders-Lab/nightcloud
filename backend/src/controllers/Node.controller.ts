@@ -59,7 +59,7 @@ export class NodeController {
     try {
       const nodes = await NodeService.searchNodesByName(
         GLOBAL_ROOT_ID,
-        parentId || GLOBAL_ROOT_ID,
+        parentId || null,
         q,
         limit,
       );
