@@ -1,3 +1,4 @@
+import { GLOBAL_ROOT_ID } from "@/config/constants";
 import { DB } from "@/config/db";
 
 import { ROOT_FOLDERS } from "./data/nodes";
@@ -10,7 +11,7 @@ async function main() {
   try {
     // Seed the global root node
     await prisma.node.upsert({
-      where: { id: "00000000-0000-0000-0000-000000000000" },
+      where: { id: GLOBAL_ROOT_ID },
       create: GLOBAL_ROOT[0],
       update: {},
     });
