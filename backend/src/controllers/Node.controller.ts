@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 
+import { GLOBAL_ROOT_ID } from "@/config/constants";
 import {
   toAncestorDTO,
   toDescendantDTO,
@@ -34,7 +35,11 @@ export class NodeController {
       );
     }
 
-    const node = await NodeService.createDirectory(parentId, name);
+    const node = await NodeService.createDirectory(
+      GLOBAL_ROOT_ID,
+      parentId || GLOBAL_ROOT_ID,
+      name,
+    );
     res.success(toNodeDTO(node), 201);
   };
 
@@ -52,7 +57,12 @@ export class NodeController {
     };
 
     try {
-      const nodes = await NodeService.searchNodesByName(parentId, q, limit);
+      const nodes = await NodeService.searchNodesByName(
+        GLOBAL_ROOT_ID,
+        parentId || GLOBAL_ROOT_ID,
+        q,
+        limit,
+      );
       res.success(nodes.map((n) => toNodeSearchDTO(n)));
     } catch (err) {
       console.error(err);
@@ -63,7 +73,8 @@ export class NodeController {
   // Obtener todos los nodos desde la raiz
   static readonly getNodesFromRoot = async (_req: Request, res: Response) => {
     try {
-      const nodes = await NodeService.getAllNodes(null);
+      // Usar un ID de root fijo para este ejemplo; en producción, obtener del usuario autenticado
+      const nodes = await NodeService.getAllNodes(GLOBAL_ROOT_ID);
       res.success(nodes.map((n) => toNodeDTO(n)));
     } catch (err) {
       console.error(err);
@@ -221,7 +232,7 @@ export class NodeController {
       // Realizar la copia del nodo
       const result = await NodeService.copyNode(
         node,
-        parentId ?? null,
+        parentId || GLOBAL_ROOT_ID,
         proposedName,
       );
 
@@ -257,7 +268,7 @@ export class NodeController {
     try {
       const copiedNodes = await NodeService.bulkCopyNodes(
         nodes,
-        parentId ?? null,
+        parentId || GLOBAL_ROOT_ID,
       );
 
       res.success(copiedNodes.map((n) => toNodeLiteDTO(n)));
@@ -285,7 +296,7 @@ export class NodeController {
       // Realizar el movimiento del nodo
       const result = await NodeService.moveNode(
         node,
-        parentId ?? null,
+        parentId || GLOBAL_ROOT_ID,
         proposedName,
       );
 
@@ -321,7 +332,7 @@ export class NodeController {
     try {
       const movedNodes = await NodeService.bulkMoveNodes(
         nodes,
-        parentId ?? null,
+        parentId || GLOBAL_ROOT_ID,
       );
 
       res.success(movedNodes.map((n) => toNodeLiteDTO(n)));

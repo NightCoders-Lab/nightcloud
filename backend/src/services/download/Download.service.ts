@@ -1,16 +1,21 @@
 import type { Response } from "express";
 
-import type { DirectoryNode, FileNode } from "@/domain/nodes/node";
+import type {
+  DirectoryNode,
+  FileNodeWithBlob,
+  Node,
+} from "@/domain/nodes/node";
 import { zipStreamDirectory } from "@/infra/download/zip-stream";
 import { toZipEntry } from "@/infra/mappers/zip.mapper";
-import type { DescendantRow } from "@/infra/prisma/types";
+import type { DescendantRowWithBlob } from "@/infra/prisma/types";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import { CloudStorageService } from "@/services/cloud/CloudStorage.service";
-import { AppError } from "@/utils";
-import buildRelativeNodePath from "@/utils/nodes/buildRelativePath";
+import { AppError, NodeUtils } from "@/utils";
 
 export class DownloadService {
-  private static readonly repo = NodeRepository;
+  private static get repo() {
+    return NodeRepository;
+  }
 
   /**
    * @description Descarga un nodo (archivo o directorio).
@@ -18,14 +23,20 @@ export class DownloadService {
    * @param res Respuesta HTTP
    */
   static readonly downloadNode = async (
-    node: FileNode | DirectoryNode,
+    node: FileNodeWithBlob | Node,
     res: Response,
   ) => {
+    // Si el nodo es un directorio, manejamos la descarga como un ZIP
     if (node.isDir) {
       await this.downloadDirectoryNode(node, res);
-    } else {
-      await this.downloadFileNode(node, res);
+      return;
     }
+
+    // Chequeo de seguridad: un nodo archivo siempre debe tener un blob asociado
+    if (!("blob" in node) || !node.blob) throw new AppError("FILE_NOT_FOUND");
+
+    // Si es un archivo, lo descargamos directamente
+    await this.downloadFileNode(node, res);
   };
 
   /**
@@ -33,9 +44,14 @@ export class DownloadService {
    * @param node Nodo archivo a descargar
    * @param res Respuesta HTTP
    */
-  static readonly downloadFileNode = async (node: FileNode, res: Response) => {
-    // Get the node path
-    const nodePath = CloudStorageService.getFilePath(node);
+  static readonly downloadFileNode = async (
+    node: FileNodeWithBlob,
+    res: Response,
+  ) => {
+    // Obtener la ruta del archivo en el almacenamiento
+    const nodePath = CloudStorageService.getFilePath(node.blob);
+    // Establecer el tipo de contenido en la respuesta
+    res.set("Content-Type", node.blob.mime);
 
     // Send the node as a download
     console.log(`Downloading node: ${node.name} from path: ${nodePath}`);
@@ -77,10 +93,12 @@ export class DownloadService {
       console.log("Iniciando descarga de directorio:", rootNode.name);
       const zipName = `${rootNode.name}.zip`;
       // Obtener todos los archivos y subcarpetas.
-      const descendants = await this.repo.getAllNodeDescendants(rootNode.id);
+      const descendants = await this.repo.getAllNodeDescendantsWithBlob(
+        rootNode.id,
+      );
 
       // Hacemos un map que nos ayudará en la construcción de rutas
-      const descendantMap = new Map<string, DescendantRow>(
+      const descendantMap = new Map<string, DescendantRowWithBlob>(
         descendants.map((n) => [n.id, n]),
       );
 
@@ -92,7 +110,7 @@ export class DownloadService {
           // Se genera una entrada de ZIP cada vez que se solicita
           yield toZipEntry(
             n,
-            buildRelativeNodePath(descendantMap, rootNode.id, n.id),
+            NodeUtils.buildRelativeNodePath(descendantMap, rootNode.id, n.id),
           );
         }
       })();
@@ -116,7 +134,7 @@ export class DownloadService {
    * @param res Respuesta HTTP
    */
   static readonly downloadNodesBulk = async (
-    nodes: (FileNode | DirectoryNode)[],
+    nodes: FileNodeWithBlob[] | Node[],
     res: Response,
   ) => {
     if (nodes.length === 1) {
@@ -127,17 +145,17 @@ export class DownloadService {
       const zipName = "download.zip"; // Nombre genérico para el ZIP
 
       // Obtener los archivos
-      const files = nodes.filter((n) => !n.isDir);
+      const files = nodes.filter((n) => !n.isDir) as FileNodeWithBlob[]; // Casteo seguro ya que en el middleware se asegura de traer los blobs
       // Obtener los directorios
       const directories = nodes.filter((n) => n.isDir);
 
       // Obtener todos los descendientes de los directorios seleccionados
-      const descendants = await this.repo.getAllNodeDescendantsBulk(
+      const descendants = await this.repo.getAllNodeDescendantsBulkWithBlob(
         directories.map((d) => d.id),
       );
 
       // Hacemos un map que nos ayudará en la construcción de rutas
-      const descendantMap = new Map<string, DescendantRow>(
+      const descendantMap = new Map<string, DescendantRowWithBlob>(
         descendants.map((n) => [n.id, n]),
       );
 
@@ -154,7 +172,7 @@ export class DownloadService {
         for (const descendant of descendants) {
           yield toZipEntry(
             descendant,
-            buildRelativeNodePath(
+            NodeUtils.buildRelativeNodePath(
               descendantMap,
               descendant.rootId,
               descendant.id,

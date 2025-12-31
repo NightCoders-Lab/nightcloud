@@ -1,5 +1,8 @@
 import type { Node } from "@/domain/nodes/node";
-import type { DescendantRow } from "@/infra/prisma/types";
+import type {
+  DescendantRow,
+  DescendantRowWithBlob,
+} from "@/infra/prisma/types";
 
 /**
  * @description Construye la ruta relativa de un nodo basado en su mapa de descendientes.
@@ -9,7 +12,7 @@ import type { DescendantRow } from "@/infra/prisma/types";
  * @returns Ruta relativa del nodo
  */
 export default function buildRelativeNodePath(
-  descendantMap: Map<string, DescendantRow>,
+  descendantMap: Map<string, DescendantRow | DescendantRowWithBlob>,
   rootNodeId: Node["id"],
   currentNodeId: Node["id"],
 ): string {

@@ -1,19 +1,27 @@
 import { DB } from "@/config/db";
-import type { Node } from "@/domain/nodes/node";
-import { fromPrismaNode } from "@/infra/mappers/node.mapper";
-import type { Prisma } from "@/infra/prisma/generated/client";
-import type { PrismaTxClient } from "@/types/prisma";
-
-const prisma = DB.getClient();
+import type { FileNodeWithBlob, Node } from "@/domain/nodes/node";
+import {
+  fromPrismaNode,
+  fromPrismaNodeWithBlob,
+} from "@/infra/mappers/node.mapper";
+import type {
+  PrismaBatchPayload,
+  PrismaNodeCreateInput,
+  PrismaNodeCreateManyInput,
+  PrismaNodeWithBlob,
+  PrismaTxClient,
+} from "@/types/prisma";
 
 export class NodeRepository {
+  private static readonly prisma = DB.getClient();
+
   /**
    * @description Crea un nuevo nodo en la base de datos
    * @param data Datos del nodo a crear
    * @returns Nodo creado
    */
-  static async create(data: Prisma.NodeCreateInput): Promise<Node> {
-    const res = await prisma.node.create({ data });
+  static async create(data: PrismaNodeCreateInput): Promise<Node> {
+    const res = await this.prisma.node.create({ data });
     return fromPrismaNode(res);
   }
 
@@ -25,7 +33,7 @@ export class NodeRepository {
    */
   static async createTx(
     tx: PrismaTxClient,
-    data: Prisma.NodeCreateInput,
+    data: PrismaNodeCreateInput,
   ): Promise<Node> {
     const res = await tx.node.create({ data });
     return fromPrismaNode(res);
@@ -39,8 +47,8 @@ export class NodeRepository {
    */
   static async createManyTx(
     tx: PrismaTxClient,
-    data: Prisma.NodeCreateManyInput[],
-  ): Promise<Prisma.BatchPayload> {
+    data: PrismaNodeCreateManyInput[],
+  ): Promise<PrismaBatchPayload> {
     return await tx.node.createMany({ data });
   }
 
@@ -49,7 +57,7 @@ export class NodeRepository {
    * @param id ID del nodo a eliminar
    */
   static async deleteById(id: Node["id"]) {
-    await prisma.node.delete({
+    await this.prisma.node.delete({
       where: { id },
     });
   }
@@ -59,7 +67,7 @@ export class NodeRepository {
    * @param ids Lista de IDs de nodos a eliminar
    */
   static async deleteManyByIds(ids: Node["id"][]) {
-    await prisma.node.deleteMany({
+    await this.prisma.node.deleteMany({
       where: {
         id: { in: ids },
       },
@@ -127,11 +135,13 @@ export class NodeRepository {
    * @returns Lista de nodos que coinciden con la búsqueda
    */
   static async search(
+    rootId: Node["rootId"],
     parentId: Node["parentId"],
     nameQuery: string,
     limit?: number,
   ) {
-    const res = await prisma.search({
+    const res = await this.prisma.search({
+      rootId,
       parentId,
       nameQuery,
       limit,
@@ -144,8 +154,11 @@ export class NodeRepository {
    * @description Suma el tamaño de todos los nodos en la base de datos
    * @returns Suma total del tamaño de los nodos
    */
-  static async sumNodesSize() {
-    const res = await prisma.node.aggregate({
+  static async sumNodesSize(rootId: Node["rootId"]) {
+    const res = await this.prisma.node.aggregate({
+      where: {
+        rootId,
+      },
       _sum: {
         size: true,
       },
@@ -206,29 +219,6 @@ export class NodeRepository {
   }
 
   /**
-   * @description Actualiza el nombre y hash de un nodo por su ID
-   * @param tx Transaccion de Prisma
-   * @param id ID del nodo a actualizar
-   * @param identity Nuevo nombre y hash para el nodo
-   * @returns Nodo actualizado
-   */
-  static async updateIdentityByIdTx(
-    tx: PrismaTxClient,
-    id: Node["id"],
-    identity: { newName: string; newHash: string },
-  ) {
-    const res = await tx.node.update({
-      where: { id },
-      data: {
-        name: identity.newName,
-        hash: identity.newHash,
-      },
-    });
-
-    return fromPrismaNode(res);
-  }
-
-  /**
    * @description Actualiza el nombre y hash de un nodo por su ID dentro de una transaccion
    * @param tx Transaccion de Prisma
    * @param id ID del nodo a actualizar
@@ -236,17 +226,16 @@ export class NodeRepository {
    * @param newParentId Nuevo ID del nodo padre
    * @returns
    */
-  static async updateIdentityAndParentIdByIdTx(
+  static async updateNameAndParentIdByIdTx(
     tx: PrismaTxClient,
     id: Node["id"],
-    identity: { newName: string; newHash: string },
+    newName: string,
     newParentId: string | null,
   ) {
     const res = await tx.node.update({
       where: { id },
       data: {
-        name: identity.newName,
-        hash: identity.newHash,
+        name: newName,
         parentId: newParentId,
       },
     });
@@ -257,27 +246,98 @@ export class NodeRepository {
   /**
    * @description Encuentra un nodo por su ID
    * @param id ID del nodo a buscar
+   * @param options Opciones adicionales para la búsqueda
    * @returns Nodo encontrado o null
    */
-  static async findById(id: Node["id"]) {
-    const res = await prisma.node.findUnique({
+  // Sobrecarga para incluir blob
+  static async findById(
+    id: Node["id"],
+    options: { includeBlob: true },
+  ): Promise<FileNodeWithBlob | null>;
+  // Sobrecarga sin incluir blob
+  static async findById(
+    id: Node["id"],
+    options?: { includeBlob?: false },
+  ): Promise<Node | null>;
+
+  // Implementación
+  static async findById(
+    id: Node["id"],
+    options: { includeBlob: boolean },
+  ): Promise<Node | FileNodeWithBlob | null>;
+
+  // 4. IMPLEMENTACIÓN (Oculta al exterior)
+  static async findById(
+    id: Node["id"],
+    options?: { includeBlob?: boolean },
+  ): Promise<Node | FileNodeWithBlob | null> {
+    const include = options?.includeBlob ? { blob: true } : undefined;
+
+    // Buscar el nodo en la base de datos
+    const result = await this.prisma.node.findUnique({
       where: { id },
+      include,
     });
-    return res ? fromPrismaNode(res) : null;
+
+    // Si no se encuentra el nodo, retornar null
+    if (!result) return null;
+
+    // Si se solicita incluir el blob y el nodo no es un directorio, mapear con blob
+    if (
+      options?.includeBlob &&
+      !result.isDir &&
+      "blob" in result &&
+      result.blob != null
+    ) {
+      return fromPrismaNodeWithBlob(result as PrismaNodeWithBlob);
+    }
+
+    // De lo contrario, mapear sin blob
+    return fromPrismaNode(result);
   }
 
+  // Sobrecarga para incluir blob
+  static async findManyByIds(
+    ids: Node["id"][],
+    options: { includeBlob: true },
+  ): Promise<FileNodeWithBlob[]>;
+  // Sobrecarga sin incluir blob
+  static async findManyByIds(
+    ids: Node["id"][],
+    options?: { includeBlob?: false },
+  ): Promise<Node[]>;
+
+  // Implementación
   /**
    * @description Encuentra multiples nodos por sus IDs
    * @param ids Lista de IDs de nodos a buscar
-   * @returns Lista de nodos encontrados
+   * @param options Opciones adicionales para la búsqueda
+   * @returns Lista de nodos encontrados o null
    */
-  static async findManyByIds(ids: Node["id"][]) {
-    const res = await prisma.node.findMany({
+  static async findManyByIds(
+    ids: Node["id"][],
+    options?: { includeBlob?: boolean },
+  ): Promise<Node[] | FileNodeWithBlob[]> {
+    const include = options?.includeBlob ? { blob: true } : undefined;
+
+    // Buscar los nodos en la base de datos
+    const result = await this.prisma.node.findMany({
       where: {
         id: { in: ids },
       },
+      include,
     });
-    return res.map(fromPrismaNode);
+
+    // Si no se encuentran nodos, retornar array vacio
+    if (result.length === 0) return [];
+
+    // Mapear los nodos encontrados segun si se incluye blob o no
+    return result.map((n) => {
+      if (options?.includeBlob && !n.isDir && "blob" in n && n.blob) {
+        return fromPrismaNodeWithBlob(n as PrismaNodeWithBlob);
+      }
+      return fromPrismaNode(n);
+    });
   }
 
   /**
@@ -294,12 +354,26 @@ export class NodeRepository {
   }
 
   /**
+   * @description Encuentra todos los nodos bajo un nodo raíz específico
+   * @param rootId ID del nodo raíz
+   * @returns Lista de nodos encontrados
+   */
+  static async findAllFromRoot(rootId: string) {
+    const res = await this.prisma.node.findMany({
+      where: {
+        rootId,
+      },
+    });
+    return res.map(fromPrismaNode);
+  }
+
+  /**
    * @description Encuentra nodos por su parentId
    * @param parentId ID del nodo padre
    * @returns Lista de nodos hijos
    */
-  static async findByParentId(parentId: string | null) {
-    const res = await prisma.node.findMany({
+  static async findByParentId(parentId: string) {
+    const res = await this.prisma.node.findMany({
       where: {
         parentId,
       },
@@ -327,71 +401,6 @@ export class NodeRepository {
           mode: "insensitive",
         },
         isDir: true,
-      },
-    });
-    return res ? fromPrismaNode(res) : null;
-  }
-
-  /**
-   * @description Busca un nodo por su hash
-   * @param hash Hash del nodo
-   * @returns Nodo encontrado o null
-   */
-  static async findByHash(hash: string) {
-    const res = await prisma.node.findFirst({
-      where: { hash },
-    });
-    return res ? fromPrismaNode(res) : null;
-  }
-
-  /**
-   * @description Busca un nodo por su hash
-   * @param tx Transaccion de Prisma
-   * @param hash Hash del nodo
-   * @returns Nodo encontrado o null
-   */
-  static async findByHashTx(tx: PrismaTxClient, hash: string) {
-    const res = await tx.node.findFirst({
-      where: { hash },
-    });
-    return res ? fromPrismaNode(res) : null;
-  }
-
-  /**
-   * @description Busca un nodo por su hash y parentId
-   * @param hash Hash del nodo
-   * @param parentId ID del nodo padre
-   * @returns Nodo encontrado o null
-   */
-  static async findByHashAndParentId(
-    hash: string,
-    parentId: string | null,
-  ): Promise<Node | null> {
-    const res = await prisma.node.findFirst({
-      where: {
-        hash,
-        parentId,
-      },
-    });
-    return res ? fromPrismaNode(res) : null;
-  }
-
-  /**
-   * @description Busca un nodo por su hash y parentId dentro de una transaccion
-   * @param tx Transaccion de Prisma
-   * @param hash Hash del nodo
-   * @param parentId ID del nodo padre
-   * @returns Nodo encontrado o null
-   */
-  static async findByHashAndParentIdTx(
-    tx: PrismaTxClient,
-    hash: string,
-    parentId: string | null,
-  ): Promise<Node | null> {
-    const res = await tx.node.findFirst({
-      where: {
-        hash,
-        parentId,
       },
     });
     return res ? fromPrismaNode(res) : null;
@@ -433,7 +442,7 @@ export class NodeRepository {
     parentId: string | null,
     regexPattern: string,
   ): Promise<Node["name"][]> {
-    const rows = await prisma.$queryRaw<{ name: string }[]>`
+    const rows = await this.prisma.$queryRaw<{ name: string }[]>`
       SELECT name
       FROM node
       WHERE "parentId" IS NOT DISTINCT FROM ${parentId}
@@ -479,7 +488,7 @@ export class NodeRepository {
     newName?: string,
     ignoreNode: boolean = false,
   ) {
-    const conflict = await prisma.node.findFirst({
+    const conflict = await this.prisma.node.findFirst({
       where: {
         parentId: node.parentId,
         name: {
@@ -506,7 +515,7 @@ export class NodeRepository {
    * @returns Nodo con el tamaño actualizado
    */
   static async incrementSizeById(id: Node["id"], delta: bigint) {
-    const res = await prisma.node.update({
+    const res = await this.prisma.node.update({
       data: {
         size: {
           increment: delta,
@@ -548,7 +557,7 @@ export class NodeRepository {
    * @returns Nodo con el tamaño actualizado
    */
   static async decrementSizeById(id: Node["id"], delta: bigint) {
-    const res = await prisma.node.update({
+    const res = await this.prisma.node.update({
       data: {
         size: {
           decrement: delta,
@@ -594,11 +603,10 @@ export class NodeRepository {
     mode: "increment" | "decrement",
   ): Promise<void> {
     // Obtener los ancestros del nodo
-    const ancestors = await prisma.getAncestors(id);
-    // console.log("Propagating size to ancestors:", ancestors);
+    const ancestors = await this.prisma.getAncestors(id);
 
     // Actualizar el tamaño de cada ancestro
-    await prisma.node.updateMany({
+    await this.prisma.node.updateMany({
       where: {
         id: { in: ancestors.map((a) => a.id) },
       },
@@ -623,7 +631,6 @@ export class NodeRepository {
   ): Promise<void> {
     // Obtener los ancestros del nodo
     const ancestors = await tx.getAncestors(id);
-    // console.log("Propagating size to ancestors:", ancestors);
 
     // Actualizar el tamaño de cada ancestro
     await tx.node.updateMany({
@@ -647,7 +654,7 @@ export class NodeRepository {
    * @returns Lista de ancestros con sus IDs y parentIds
    */
   static async getAllNodeAncestors(startNodeId: Node["id"]) {
-    return await prisma.getAncestors(startNodeId);
+    return await this.prisma.getAncestors(startNodeId);
   }
 
   /**
@@ -671,7 +678,7 @@ export class NodeRepository {
    * @returns Lista de ancestros con sus IDs y parentIds
    */
   static async getAllNodeAncestorsBulk(rootNodeIds: Node["id"][]) {
-    return await prisma.getAncestorsBulk(rootNodeIds);
+    return await this.prisma.getAncestorsBulk(rootNodeIds);
   }
 
   /**
@@ -695,7 +702,18 @@ export class NodeRepository {
    * @returns Lista de descendientes
    */
   static async getAllNodeDescendants(startNodeId: Node["id"]) {
-    return await prisma.getDescendants(startNodeId);
+    return await this.prisma.getDescendants(startNodeId);
+  }
+
+  /**
+   * @remarks La funcion getDescendantsWithBlob es una queryRaw de una funcion almacenada optimizada
+   * Es la forma mas eficiente de obtener todos los descendientes con datos de Blob en una sola consulta.
+   * @description Obtiene todos los descendientes de un nodo dado, incluyendo datos de Blob
+   * @param startNodeId ID del nodo desde el cual comenzar a buscar descendientes
+   * @returns Lista de descendientes con datos de Blob
+   */
+  static async getAllNodeDescendantsWithBlob(startNodeId: Node["id"]) {
+    return await this.prisma.getDescendantsWithBlob(startNodeId);
   }
 
   /**
@@ -714,12 +732,36 @@ export class NodeRepository {
   }
 
   /**
+   * @remarks La funcion getDescendantsWithBlob es una queryRaw de una funcion almacenada optimizada
+   * Es la forma mas eficiente de obtener todos los descendientes con datos de Blob en una sola consulta.
+   * @description Obtiene todos los descendientes de un nodo dado, incluyendo datos de Blob, dentro de una transaccion.
+   * @param tx Transaccion de Prisma
+   * @param startNodeId ID del nodo desde el cual comenzar a buscar descendientes
+   * @returns Lista de descendientes con datos de Blob
+   */
+  static async getAllNodeDescendantsWithBlobTx(
+    tx: PrismaTxClient,
+    startNodeId: Node["id"],
+  ) {
+    return await tx.getDescendantsWithBlob(startNodeId);
+  }
+
+  /**
    * @description Obtiene todos los descendientes de multiples nodos
    * @param rootNodeIds IDs de los nodos raíz desde los cuales comenzar a buscar descendientes
    * @returns Lista de descendientes
    */
   static async getAllNodeDescendantsBulk(rootNodeIds: Node["id"][]) {
-    return await prisma.getDescendantsBulk(rootNodeIds);
+    return await this.prisma.getDescendantsBulk(rootNodeIds);
+  }
+
+  /**
+   * @description Obtiene todos los descendientes de multiples nodos, incluyendo datos de Blob
+   * @param rootNodeIds IDs de los nodos raíz desde los cuales comenzar a buscar descendientes
+   * @returns Lista de descendientes con datos de Blob
+   */
+  static async getAllNodeDescendantsBulkWithBlob(rootNodeIds: Node["id"][]) {
+    return await this.prisma.getDescendantsBulkWithBlob(rootNodeIds);
   }
 
   /**
@@ -733,6 +775,19 @@ export class NodeRepository {
     rootNodeIds: Node["id"][],
   ) {
     return await tx.getDescendantsBulk(rootNodeIds);
+  }
+
+  /**
+   * @description Obtiene todos los descendientes de multiples nodos, incluyendo datos de Blob, dentro de una transaccion
+   * @param tx Transaccion de Prisma
+   * @param rootNodeIds IDs de los nodos raíz desde los cuales comenzar a buscar descendientes
+   * @returns Lista de descendientes con datos de Blob
+   */
+  static async getAllNodeDescendantsBulkWithBlobTx(
+    tx: PrismaTxClient,
+    rootNodeIds: Node["id"][],
+  ) {
+    return await tx.getDescendantsBulkWithBlob(rootNodeIds);
   }
 
   /**

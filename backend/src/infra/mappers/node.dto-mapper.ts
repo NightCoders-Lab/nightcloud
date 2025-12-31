@@ -13,6 +13,7 @@ type NodePicked = Pick<
   Node,
   | "id"
   | "parentId"
+  | "rootId"
   | "name"
   | "size"
   | "mime"
@@ -23,17 +24,17 @@ type NodePicked = Pick<
 
 type NodeLitePicked = Pick<
   Node,
-  "id" | "parentId" | "name" | "size" | "mime" | "isDir"
+  "id" | "parentId" | "rootId" | "name" | "size" | "mime" | "isDir"
 >;
 
 type AncestorPicked = Pick<
   AncestorRow,
-  "id" | "parentId" | "name" | "size" | "mime" | "isDir" | "depth"
+  "id" | "parentId" | "rootId" | "name" | "size" | "mime" | "isDir" | "depth"
 >;
 
 type DescendantPicked = Pick<
   AncestorRow,
-  "id" | "parentId" | "name" | "size" | "mime" | "isDir" | "depth"
+  "id" | "parentId" | "rootId" | "name" | "size" | "mime" | "isDir" | "depth"
 >;
 
 /**
@@ -44,6 +45,7 @@ type DescendantPicked = Pick<
 export const toNodeDTO = (n: NodePicked): NodeDTO => ({
   id: n.id,
   parentId: n.parentId,
+  rootId: n.rootId,
   name: n.name,
   size: n.size.toString(), // Convertir bigint a string por temas de incompatibilidad con JSON
   mime: n.mime,
@@ -60,6 +62,7 @@ export const toNodeDTO = (n: NodePicked): NodeDTO => ({
 export const toAncestorDTO = (n: AncestorPicked): AncestorDTO => ({
   id: n.id,
   parentId: n.parentId,
+  rootId: n.rootId,
   name: n.name,
   size: n.size.toString(), // Convertir bigint a string por temas de incompatibilidad con JSON
   mime: n.mime,
@@ -99,6 +102,7 @@ export const toNodeSearchDTO = (n: NodeSearchResult): NodeSearchDTO => ({
 export const toNodeLiteDTO = (n: NodeLitePicked): NodeLiteDTO => ({
   id: n.id,
   parentId: n.parentId,
+  rootId: n.rootId,
   name: n.name,
   size: n.size.toString(), // Convertir bigint a string por temas de incompatibilidad con JSON
   mime: n.mime,
