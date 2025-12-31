@@ -12,3 +12,7 @@ pnpm-workspace.yaml
 
 # SonarQube
 sonar-project.properties
+
+# Cloud files
+cloud/
+.tmp/
