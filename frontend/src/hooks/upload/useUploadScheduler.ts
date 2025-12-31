@@ -1,9 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useUploadJob } from "./useUploadJob";
 import { uploadFiles } from "@/api/NodeAPI";
 import { buildUploadFormData } from "@/utils/build/buildUploadFormData";
 
-const BATCH_DELAY = 500; // Milisegundos de espera entre batches
 
 export function useUploadScheduler() {
   const {
@@ -18,26 +17,32 @@ export function useUploadScheduler() {
     cancelJob,
   } = useUploadJob();
 
-  // Referencia para controlar el cooldown entre batches
-  const isCoolingDownRef = useRef(false);
-
   useEffect(() => {
     if (paused) return;
 
+    // Calcular los slots disponibles
     const availableSlots = maxConcurrency - active.length;
     if (availableSlots <= 0) return;
 
+    // Obtener los trabajos a iniciar
     const jobsToStart = queue.slice(0, availableSlots);
 
+    // Si no hay trabajos para iniciar, no hacer nada
+    if (jobsToStart.length === 0) return;
+
+    // Iniciar los trabajos
     jobsToStart.forEach((job) => {
+      // Iniciar el trabajo y obtener el controlador de aborto
       const startedJob = startJob(job.id);
       if (!startedJob?.controller) return;
 
+      // Construir el FormData para la subida
       const formData = buildUploadFormData(
         startedJob.files,
         startedJob.parentId
       );
 
+      // Iniciar la subida de archivos
       uploadFiles(formData, startedJob.controller.signal, async (p) => {
         updateProgress(startedJob.id, p.percent);
       })
@@ -52,17 +57,6 @@ export function useUploadScheduler() {
           failJob(startedJob.id, err);
         });
     });
-
-    // Activar cooldown cuando este batch termine
-    isCoolingDownRef.current = true;
-
-    // Configurar el temporizador para desactivar el cooldown
-    const cooldownTimer = setTimeout(() => {
-      isCoolingDownRef.current = false;
-    }, BATCH_DELAY);
-
-    // Limpiar el temporizador al rerenderizar o desmontar
-    return () => clearTimeout(cooldownTimer);
   }, [
     queue,
     active.length,

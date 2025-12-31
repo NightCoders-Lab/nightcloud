@@ -34,6 +34,9 @@ export type UploadJobSliceType = {
 // Límite de archivos a subir simultáneamente (configurable vía variable de entorno)
 const uploadLimit = Number(import.meta.env.VITE_API_UPLOAD_FILES_LIMIT) || 10;
 
+// Límite máximo absoluto (para evitar abusos)
+const MAX_PARALLEL_UPLOADS = 2;
+
 export const createUploadJobSlice: StateCreator<UploadJobSliceType> = (
   set,
   get
@@ -45,7 +48,7 @@ export const createUploadJobSlice: StateCreator<UploadJobSliceType> = (
   failed: [],
   cancelled: [],
   // Configuración de la subida
-  maxConcurrency: uploadLimit,
+  maxConcurrency: MAX_PARALLEL_UPLOADS,
   paused: false,
 
   // Acciones
