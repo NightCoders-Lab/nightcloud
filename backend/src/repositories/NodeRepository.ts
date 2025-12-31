@@ -287,7 +287,7 @@ export class NodeRepository {
       options?.includeBlob &&
       !result.isDir &&
       "blob" in result &&
-      result.blob
+      result.blob != null
     ) {
       return fromPrismaNodeWithBlob(result as PrismaNodeWithBlob);
     }

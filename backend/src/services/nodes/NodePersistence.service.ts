@@ -51,7 +51,7 @@ export class NodePersistenceService {
     let nodeName = initialNodeName;
 
     // Primero aseguramos el blob en la base de datos
-    const blob = await this.blobRepo.upsert({
+    const blob = await this.blobRepo.upsertTx(tx, {
       hash: blobIdentifiers.blobHash,
       size: BigInt(file.size),
       mime: file.mimetype,

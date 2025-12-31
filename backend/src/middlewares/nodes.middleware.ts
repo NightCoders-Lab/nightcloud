@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { MulterError } from "multer";
 
+import { GLOBAL_ROOT_ID } from "@/config/constants";
 import type { FileNodeWithBlob, Node } from "@/domain/nodes/node";
 import { isDirectoryNode } from "@/infra/guards/node";
 import { fromMulterFile } from "@/infra/upload/multer-file";
@@ -90,7 +91,7 @@ export const nodeProcess = async (
 
     const results = await NodeService.processUploadedFiles(
       uploadedFiles,
-      "00000000-0000-0000-0000-000000000000", // rootId por defecto
+      GLOBAL_ROOT_ID, // rootId por defecto
       req.body.parentId,
       manifest,
       isAborted,

@@ -1,7 +1,7 @@
 import { DB } from "@/config/db";
 import type { Blob } from "@/domain/blobs/blob";
 import { fromPrismaBlob } from "@/infra/mappers/blob.mapper";
-import type { PrismaBlobCreateInput } from "@/types/prisma";
+import type { PrismaBlobCreateInput, PrismaTxClient } from "@/types/prisma";
 
 export class BlobRepository {
   private static readonly prisma = DB.getClient();
@@ -25,12 +25,16 @@ export class BlobRepository {
   }
 
   /**
-   * @description Crea o actualiza un blob en la base de datos basado en su hash.
+   * @description Crea o actualiza un blob
+   * @param tx Transacción Prisma
    * @param data Datos para crear o actualizar el blob
    * @returns Blob creado o actualizado
    */
-  static async upsert(data: PrismaBlobCreateInput): Promise<Blob> {
-    const res = await this.prisma.blob.upsert({
+  static async upsertTx(
+    tx: PrismaTxClient,
+    data: PrismaBlobCreateInput,
+  ): Promise<Blob> {
+    const res = await tx.blob.upsert({
       where: { hash: data.hash },
       create: data,
       update: {},
