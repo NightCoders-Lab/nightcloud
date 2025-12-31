@@ -54,7 +54,7 @@ export default function RenameNodeModal() {
 
       // Actualizar el nombre del nodo detallado
       queryClient.setQueryData(
-        ["nodeDetails", nodeId],
+        ["node", "details", nodeId],
         (oldData: NodeType | undefined) => {
           if (!oldData) return oldData;
           return { ...oldData, name: data.name };
@@ -65,7 +65,7 @@ export default function RenameNodeModal() {
       queryClient.invalidateQueries({
         queryKey: ["nodes", parentId ?? "root"],
       });
-      queryClient.invalidateQueries({ queryKey: ["nodeDetails", nodeId] });
+      queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
 
       closeModal();
       toast.success(`${data.isDir ? "Folder" : "File"} renamed successfully`, {

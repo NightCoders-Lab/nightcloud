@@ -34,7 +34,7 @@ export function useUploadInvalidateQueries() {
       });
       // Si hay un parentId, invalidar también los detalles del nodo padre
       if (parentId) {
-        queryClient.invalidateQueries({ queryKey: ["nodeDetails", parentId] });
+        queryClient.invalidateQueries({ queryKey: ["node", "details", parentId] });
       }
     });
 

@@ -75,6 +75,20 @@ export const nodesSchema = z.array(nodeSchema);
 // Schema que puede ser un nodo o una lista de nodos
 export const nodesOrNodeSchema = z.union([nodesSchema, nodeSchema]);
 
+// Schema para resultados de búsqueda de nodos
+export const nodeSearchSchema = nodeSchema.pick({
+  id: true,
+  parentId: true,
+  name: true,
+  size: true,
+  mime: true,
+  isDir: true,
+  updatedAt: true,
+});
+
+// Schema para una lista de resultados de búsqueda de nodos
+export const nodesSearchSchema = z.array(nodeSearchSchema);
+
 export const cloudStatsSchema = z.object({
   disk: z.object({
     total: z.string(),
@@ -97,6 +111,7 @@ export const cloudStatsSchema = z.object({
 export type ApiResponseType = z.infer<typeof apiResponseSchema>;
 export type NodeType = z.infer<typeof nodeSchema>;
 export type NodeLiteType = z.infer<typeof nodeLiteSchema>;
+export type NodeSearchType = z.infer<typeof nodeSearchSchema>;
 export type AncestorType = z.infer<typeof ancestorSchema>;
 export type DescendantType = z.infer<typeof descendantSchema>;
 export type CloudStatsType = z.infer<typeof cloudStatsSchema>;

@@ -6,11 +6,13 @@ import {
   nodeSchema,
   nodesOrNodeLiteSchema,
   nodesSchema,
+  nodesSearchSchema,
   type AncestorType,
   type DescendantType,
   type NodeFolderFormData,
   type NodeLiteType,
   type NodeRenameFormData,
+  type NodeSearchType,
   type NodeType,
 } from "@/types";
 import type { UploadProgress } from "@/types/upload.types";
@@ -320,6 +322,53 @@ export async function moveNode(
     }
   } catch (err) {
     if (isAxiosError(err) && err.response?.data.error) {
+      throw new Error(err.response.data.error.message);
+    } else throw err;
+  }
+}
+
+/**
+ * @description Buscar nodos por nombre
+ * @param name Nombre a buscar
+ * @param parentId ID del nodo padre (opcional)
+ * @param limit Número máximo de resultados a retornar (por defecto 20)
+ * @returns {Promise<NodeType[]>} Lista de nodos encontrados
+ */
+export async function searchNodeByName(
+  name: string,
+  parentId?: string,
+  limit: number = 20
+): Promise<NodeSearchType[]> {
+  try {
+    // Limpiar el nombre de búsqueda
+    const cleanName = name.trim();
+
+    // Evitar búsquedas con nombres vacíos
+    if (cleanName.length === 0) return [];
+
+    // Construir los parámetros de la consulta
+    const params = new URLSearchParams({
+      q: cleanName,
+      limit: limit.toString(),
+    });
+
+    // Agregar parentId si se proporcionó
+    if (parentId) {
+      params.append("parentId", parentId);
+    }
+
+    // Realizar la solicitud a la API
+    const { data } = await api.get(`/nodes/search?${params.toString()}`);
+    const apiRes = nodesSearchSchema.safeParse(validateApiRes(data).data);
+
+    // Retornar los datos validados
+    if (apiRes.success) {
+      return apiRes.data;
+    } else {
+      throw new Error("Error al buscar el nodo");
+    }
+  } catch (err) {
+    if (isAxiosError(err) && err.response) {
       throw new Error(err.response.data.error.message);
     } else throw err;
   }

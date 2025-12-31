@@ -22,6 +22,7 @@ import { useUploadScheduler } from "@/hooks/upload/useUploadScheduler";
 import { useUploadQuerySync } from "@/hooks/upload/useUploadQuerySync";
 import { useUploadInvalidateQueries } from "@/hooks/upload/useUploadInvalidateQueries";
 import { useUploadToast } from "@/hooks/upload/useUploadToast";
+import { useSearch } from "@/hooks/search/useSearch";
 
 export default function AppLayout() {
   const location = useLocation();
@@ -29,6 +30,7 @@ export default function AppLayout() {
   const queryParams = new URLSearchParams(location.search);
   const scope = queryParams.get("scope");
   const { setSelectedNodes } = useSelectedNodes();
+  const { setSearchResults, setSearchQuery } = useSearch();
   const { openCtx } = useCtx();
   const isRootOrDirView =
     location.pathname === "/" || location.pathname.startsWith("/directory/");
@@ -47,7 +49,11 @@ export default function AppLayout() {
     setTimeout(() => {
       setSelectedNodes([]);
     }, 300);
-  }, [params, setSelectedNodes, scope]);
+    // También limpiar resultados de búsqueda al cambiar de ruta
+    setSearchResults([]);
+    // Limpiar la consulta de búsqueda al cambiar de ruta
+    setSearchQuery("");
+  }, [params, setSelectedNodes, scope, setSearchResults, setSearchQuery]);
 
   // Configurar sensores para el drag and drop
   const sensors = useSensors(

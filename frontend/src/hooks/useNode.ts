@@ -39,7 +39,7 @@ export function useNode(nodeId: NodeType["id"] | undefined, mode: UseNodeMode) {
   // Datos y estados de la consulta del nodo actual
   const nodeQuery = useQuery({
     queryFn: () => getNodeDetails(nodeId!),
-    queryKey: ["nodeDetails", nodeId],
+    queryKey: ["node", "details", nodeId],
     enabled: hasNodeId && includeNode, // Solo cargar si hay nodeId y se quiere el nodo
     placeholderData: (prevData) => prevData, // Usar datos previos como placeholder - evitar flashes de carga al quedarse sin datos
   });

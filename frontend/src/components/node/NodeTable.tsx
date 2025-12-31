@@ -9,6 +9,7 @@ import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { DragOverlay } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import ActiveNode from "./ActiveNode";
+import { useSearch } from "@/hooks/search/useSearch";
 
 // TODO: Adaptar el backend para los favoritos
 
@@ -21,11 +22,17 @@ export default function NodeTable({ nodes }: Readonly<NodeTableProps>) {
   const [direction, setDirection] = useState<SortDirection>("asc");
   const { selectedNodes, setSelectedNodes, clearSelectedNodes } =
     useSelectedNodes();
+  const { searchResults, searchQuery } = useSearch();
 
   // Nodos ordenados segun la direccion
   const sortedNodes = useMemo(() => {
     return toggleNameDirection(direction, [...nodes]);
   }, [nodes, direction]);
+
+  // Nodos a renderizar (resultados de busqueda o todos los nodos)
+  const isSearching = searchQuery.trim().length > 0;
+  const nodesToRender = isSearching ? searchResults : sortedNodes;
+  const hasNodes = nodesToRender.length > 0;
 
   // Alternar la direccion de ordenamiento
   const toggleDirection = () => {
@@ -75,25 +82,29 @@ export default function NodeTable({ nodes }: Readonly<NodeTableProps>) {
 
       {/* Filas */}
       <div className="flex-1 overflow-y-auto mt-2 space-y-1 scrollbar-thin scrollbar-thumb-night-border scrollbar-track-transparent pb-2">
-        {sortedNodes.length > 0 ? (
-          <>
-            {sortedNodes.map((node) => {
-              return node.isDir ? (
-                <NodeDir key={node.id} node={node} />
-              ) : (
-                <NodeFile key={node.id} node={node} />
-              );
-            })}
-            <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
-              {" "}
-              {/* ese modifier centra el dragoverlay al cursor */}
-              <ActiveNode nodes={sortedNodes} />
-            </DragOverlay>
-          </>
-        ) : (
+        {!hasNodes && (
           <div className="text-center text-night-muted text-xl mt-20">
-            No files found
+            {isSearching
+              ? "No results found"
+              : "This folder is empty. Upload files to get started!"}
           </div>
+        )}
+
+        {hasNodes &&
+          nodesToRender.map((node) =>
+            node.isDir ? (
+              <NodeDir key={node.id} node={node} />
+            ) : (
+              <NodeFile key={node.id} node={node} />
+            )
+          )}
+
+        {!isSearching && (
+          <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+            {" "}
+            {/* ese modifier centra el dragoverlay al cursor */}
+            <ActiveNode nodes={sortedNodes} />
+          </DragOverlay>
         )}
       </div>
     </div>

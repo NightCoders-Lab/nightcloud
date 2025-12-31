@@ -77,7 +77,7 @@ export default function CopyNodeModal() {
 
   if (node.error) {
     toast.error(node.error.message);
-    queryClient.invalidateQueries({ queryKey: ["nodeDetails", nodeId] });
+    queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
     return null;
   }
 
