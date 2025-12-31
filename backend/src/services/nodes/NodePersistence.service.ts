@@ -70,6 +70,47 @@ export class NodePersistenceService {
 
     // Intentamos crear el nodo, manejando posibles conflictos de unicidad
     while (true) {
+      // Verificamos si el nombre existe ANTES de intentar insertar.
+      // Esto evita que la transacción se aborte si hay conflicto.
+      const existingNode = await tx.node.findUnique({
+        where: {
+          parentId_name: {
+            parentId: parentId!,
+            name: nodeName,
+          },
+        },
+        include: { blob: true },
+      });
+
+      //  SI EXISTE: Manejamos el conflicto (Idempotencia o Renombrado)
+      if (existingNode) {
+        // Idempotencia: Si es el mismo archivo, devolvemos el existente
+        if (!existingNode.isDir && existingNode.blob?.hash === blob.hash) {
+          return fromPrismaNode(existingNode);
+        }
+
+        // Conflicto Real: Calculamos nuevo nombre y reintentamos en la siguiente vuelta
+        attempt++;
+        if (attempt >= maxAttempts) {
+          throw new AppError(
+            "INTERNAL",
+            "No se pudo subir el archivo (demasiados intentos)",
+          );
+        }
+
+        nodeName = await this.calculateNextName(
+          tx,
+          file,
+          parentId,
+          nodeName,
+          initialNodeName,
+        );
+
+        // Continuamos al inicio del while con el nuevo nombre
+        continue;
+      }
+
+      // SI NO EXISTE: Intentamos crear
       try {
         return await this.createNodeAndRegisterMove({
           tx,
@@ -81,35 +122,20 @@ export class NodePersistenceService {
           pendingMoves,
         });
       } catch (err) {
-        if (!isPrismaUniqueError(err)) throw err;
+        // CASO BORDE (Race Condition):
+        // Si entre el findUnique (paso 1) y el create (paso 3) otro proceso insertó el archivo,
+        // create fallará y abortará la transacción.
 
-        // Verificamos si ya existe un nodo con el mismo nombre y blob (idempotencia)
-        const existingNode = await this.checkIdempotency(
-          tx,
-          parentId,
-          nodeName,
-          blob.hash,
-        );
-
-        // Si encontramos un nodo existente con el mismo blob, retornamos ese nodo (idempotencia)
-        if (existingNode) {
-          return existingNode;
+        // En este punto, NO PODEMOS RECUPERARNOS dentro de esta transacción porque está muerta (25P02).
+        // Debemos lanzar el error para que el `withDeadlockRetry` superior reinicie el proceso.
+        if (isPrismaUniqueError(err)) {
+          console.warn(
+            `[NodePersistence] Race condition detected for ${nodeName}. Retrying transaction.`,
+          );
+          throw err; // Dejamos que falle para que el retry global lo maneje
         }
 
-        // Si hay un error de unicidad, incrementamos el intento y cambiamos el nombre
-        attempt++;
-        if (attempt >= maxAttempts) {
-          throw new AppError("INTERNAL", "No se pudo subir el archivo");
-        }
-
-        // Calculamos un nuevo nombre para el nodo
-        nodeName = await this.calculateNextName(
-          tx,
-          file,
-          parentId,
-          nodeName,
-          initialNodeName,
-        );
+        throw err;
       }
     }
   }
@@ -148,43 +174,6 @@ export class NodePersistenceService {
     });
 
     return node;
-  }
-
-  /**
-   * @description Verifica si ya existe un nodo con el mismo nombre y blob para garantizar idempotencia.
-   * @param tx Transacción Prisma
-   * @param parentId ID del nodo padre
-   * @param nodeName Nombre del nodo
-   * @param blobHash Hash del blob
-   * @returns Nodo existente o null si no existe
-   */
-  private static async checkIdempotency(
-    tx: PrismaTxClient,
-    parentId: Node["parentId"],
-    nodeName: string,
-    blobHash: string,
-  ): Promise<Node | null> {
-    // Verificamos si el nodo existente tiene el mismo blob (evitar duplicados a nivel de nodos)
-    const existingNode = await tx.node.findUnique({
-      where: {
-        parentId_name: {
-          parentId: parentId!, // parentId siempre existira
-          name: nodeName,
-        },
-      },
-      include: { blob: true }, // Necesitamos ver su Blob
-    });
-
-    // Si el nodo existente tiene el mismo blob, lo retornamos directamente
-    if (
-      existingNode &&
-      !existingNode.isDir &&
-      existingNode.blob?.hash === blobHash
-    ) {
-      return fromPrismaNode(existingNode);
-    }
-
-    return null;
   }
 
   /**
