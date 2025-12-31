@@ -2,11 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fsSize } from "systeminformation";
 
-import type { FileNode, FileNodeLite } from "@/domain/nodes/node";
+import type { Blob } from "@/domain/blobs/blob";
 import type { CloudStorage } from "@/services/cloud/CloudStorage";
 import { AppError, pathExists } from "@/utils";
-
-import type { AncestorRow, DescendantRow } from "../prisma/types";
 
 /**
  * @description Implementación de almacenamiento en la nube local.
@@ -105,6 +103,13 @@ export class LocalCloudStorage implements CloudStorage {
    * @param finalPath Ruta final del archivo
    */
   async move(tmpPath: string, finalPath: string): Promise<void> {
+    // Asegurarse de que el directorio destino exista
+    const destDir = path.dirname(finalPath);
+
+    // Asegurar la existencia del directorio destino
+    await fs.mkdir(destDir, { recursive: true });
+
+    // Finalmente mover el archivo
     await fs.rename(tmpPath, finalPath);
   }
 
@@ -114,7 +119,22 @@ export class LocalCloudStorage implements CloudStorage {
    * @param destPath Ruta destino del archivo
    */
   async copy(srcPath: string, destPath: string): Promise<void> {
+    // Asegurarse de que el directorio destino exista
+    const destDir = path.dirname(destPath);
+
+    // Asegurar la existencia del directorio destino
+    await fs.mkdir(destDir, { recursive: true });
+
+    // Finalmente copiar el archivo
     await fs.copyFile(srcPath, destPath);
+  }
+
+  async deleteDir(dirPath: string): Promise<void> {
+    try {
+      await fs.rmdir(dirPath);
+    } catch (err) {
+      console.log("Error al eliminar directorio local:", err);
+    }
   }
 
   /**
@@ -122,7 +142,15 @@ export class LocalCloudStorage implements CloudStorage {
    * @param path Ruta completa del archivo a eliminar
    */
   async delete(path: string): Promise<void> {
-    await fs.unlink(path);
+    try {
+      await fs.unlink(path);
+    } catch (err) {
+      // Si el archivo no existe, no hacer nada
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return;
+      }
+      console.log("Error al eliminar archivo local:", err);
+    }
   }
 
   /**
@@ -162,22 +190,27 @@ export class LocalCloudStorage implements CloudStorage {
   }
 
   /**
-   * @description Obtiene la ruta completa del archivo asociado a un nodo.
-   * @param node Nodo del cual se desea obtener la ruta completa del archivo
-   * @returns string ruta completa del archivo en el sistema de archivos
+   * @description Obtiene la ruta completa de un archivo en el almacenamiento en la nube local a partir de un blob o su storageKey.
+   * @param input Blob o storageKey del cual obtener la ruta
+   * @returns Ruta completa del archivo en el almacenamiento en la nube local
    */
-  getFilePath(file: FileNodeLite | FileNode | AncestorRow | DescendantRow) {
-    console.log(
-      `Getting node file path for node: ${file.id}, isDir: ${file.isDir}`,
-    );
+  getFilePath(input: Blob | Blob["storageKey"]) {
+    // Determinar el storageKey
+    let storageKey: string;
 
-    // Las carpetas no tienen ruta de archivo
-    if (file.isDir)
-      throw new AppError("INTERNAL", "Las carpetas no tienen ruta de archivo");
+    if (typeof input === "string") {
+      // Si es un string, es el storageKey directamente
+      storageKey = input;
+    } else {
+      // Si es un Blob, obtener el storageKey del blob
+      storageKey = input.storageKey;
+    }
 
     // Construir la ruta completa del archivo
     const cloudRoot = path.resolve(process.cwd(), `${process.env.CLOUD_ROOT}`);
-    const filePath = path.resolve(cloudRoot, file.hash);
+    // Construimos la ruta con el root de la nube y el storageKey del blob
+    // El storageKey ya seria algo como "a1/b1/hashdelcontenido"
+    const filePath = path.resolve(cloudRoot, storageKey);
 
     // Asegurarse de que el archivo este dentro del directorio CLOUD_ROOT (vulnerabilidad de path traversal)
     if (!filePath.startsWith(cloudRoot + path.sep)) {

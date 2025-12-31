@@ -1,11 +1,15 @@
-import type { FileNode, FileNodeLite } from "@/domain/nodes/node";
+import type { Blob } from "@/domain/blobs/blob";
+import type { FileNode, FileNodeLite, Node } from "@/domain/nodes/node";
 import { LocalCloudStorage } from "@/infra/cloud/LocalCloudStorage";
 import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
-import { NodeRepository } from "@/repositories/NodeRepository";
+import { BlobService } from "@/services/blob/Blob.service";
+import { NodeService } from "@/services/nodes/Node.service";
+import { AppError, BlobUtils } from "@/utils";
 
 export class CloudStorageService {
-  private static readonly storage: LocalCloudStorage = new LocalCloudStorage();
-  private static readonly nodeRepo = NodeRepository;
+  private static get storage() {
+    return new LocalCloudStorage();
+  }
 
   /**
    * @description Obtiene la ruta raiz en el almacenamiento en la nube
@@ -19,10 +23,10 @@ export class CloudStorageService {
    * @description Obtiene estadísticas del almacenamiento en la nube
    * @returns Estadísticas del almacenamiento en la nube
    */
-  static async getCloudStorageStats() {
+  static async getCloudStorageStats(rootId: Node["rootId"]) {
     // Obtener estadísticas del disco y uso en la nube
     const { totalDisk, usedDisk, freeDisk } = await this.storage.getDiskStats();
-    const usedCloud = await this.nodeRepo.sumNodesSize();
+    const usedCloud = await NodeService.getRootSize(rootId);
 
     // Convertir a BigInt para evitar problemas de precisión con números grandes
     const totalDiskBig = BigInt(totalDisk);
@@ -61,13 +65,50 @@ export class CloudStorageService {
 
   /**
    * @description Obtiene la ruta completa de un archivo en el almacenamiento en la nube
-   * @param file Nodo del cual obtener la ruta
+   * @param input Blob o storageKey del blob
    * @returns Ruta completa del archivo en el almacenamiento en la nube
    */
-  static getFilePath(
-    file: FileNodeLite | FileNode | AncestorRow | DescendantRow,
+  static getFilePath(input: Blob | Blob["storageKey"]) {
+    // Si es un string validar que sea una storageKey valida
+    if (typeof input === "string") {
+      // Validar que la storageKey sea valida
+      const valid = BlobUtils.validateLocalStorageKey(input);
+
+      // Si la storageKey no es valida, lanzamos error de archivo no encontrado
+      if (!valid) {
+        console.log(`StorageKey invalida: ${input}`);
+        throw new AppError("FILE_NOT_FOUND");
+      }
+    }
+
+    // Si es un blob, no es necesario validar nada ya que viene de la base de datos
+    return this.storage.getFilePath(input);
+  }
+
+  /**
+   * @remarks Esta funcion realiza una consulta a la base de datos para obtener el blob asociado,
+   * tomar en cuenta esto al usarla en bucles o multiples llamadas.
+   * @description Obtiene la ruta completa de un archivo en el almacenamiento en la nube a partir de un nodo
+   * @param node Nodo del cual obtener la ruta
+   * @returns Ruta completa del archivo en el almacenamiento en la nube
+   */
+  static async getFilePathFromNode(
+    node: FileNodeLite | FileNode | AncestorRow | DescendantRow,
   ) {
-    return this.storage.getFilePath(file);
+    // Si el archivo no tiene blobId, no tiene ruta
+    if (!node.blobId) return;
+
+    // Obtener el blob asociado al archivo
+    const blob = await BlobService.getBlobById(node.blobId);
+
+    // Si no se encuentra el blob, lanzar error de archivo no encontrado
+    if (!blob) {
+      console.log(`Blob no encontrado para el nodo ${node.id}`);
+      throw new AppError("FILE_NOT_FOUND");
+    }
+
+    // Retornar la ruta completa del archivo en el almacenamiento en la nube
+    return this.storage.getFilePath(blob);
   }
 
   /**
@@ -86,6 +127,15 @@ export class CloudStorageService {
    */
   static async delete(filePath: string) {
     return await this.storage.delete(filePath);
+  }
+
+  /**
+   * @description Elimina un directorio del almacenamiento en la nube
+   * @param dirPath Ruta completa del directorio a eliminar
+   * @returns void
+   */
+  static async deleteDir(dirPath: string) {
+    return await this.storage.deleteDir(dirPath);
   }
 
   /**

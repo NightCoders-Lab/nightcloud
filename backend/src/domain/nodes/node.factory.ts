@@ -1,95 +1,128 @@
+import type { Blob } from "@/domain/blobs/blob";
+
 import type {
   FileNode,
   DirectoryNode,
   FileNodeLite,
   DirectoryNodeLite,
+  CreateFileNodeParams,
+  CreateDirectoryNodeParams,
+  CreateFileNodeLiteParams,
+  CreateDirectoryNodeLiteParams,
+  FileNodeWithBlob,
 } from "./node";
 
 // Factory para crear nodos de archivo y directorio
 
 /**
  * @description Crea un nodo de archivo
- * @param id ID del nodo
- * @param parentId ID del nodo padre
- * @param name Nombre del nodo
- * @param hash Hash del nodo
- * @param size Tamaño del nodo
- * @param mime Tipo MIME del archivo
+ * @param param0 Parámetros para crear el nodo de archivo
  * @returns Nodo de archivo
  */
-export function createFileNode(
-  id: string,
-  parentId: string | null,
-  name: string,
-  hash: string,
-  size: bigint,
-  mime: string,
-  metadata: { createdAt: Date; updatedAt: Date },
-): FileNode {
+export function createFileNode({
+  id,
+  parentId,
+  rootId,
+  blobId,
+  name,
+  size,
+  mime,
+  createdAt,
+  updatedAt,
+}: CreateFileNodeParams): FileNode {
   return {
     id,
     parentId,
+    rootId,
+    blobId,
     name,
-    hash,
     isDir: false,
     size,
     mime,
-    ...metadata,
+    createdAt,
+    updatedAt,
+  };
+}
+
+/**
+ * @description Crea un nodo de archivo con su blob asociado
+ * @param param0 Parámetros para crear el nodo de archivo junto con el blob
+ * @returns Nodo de archivo con blob
+ */
+export function createFileNodeWithBlob({
+  id,
+  parentId,
+  rootId,
+  blob,
+  name,
+  size,
+  mime,
+  createdAt,
+  updatedAt,
+}: CreateFileNodeParams & { blob: Blob }): FileNodeWithBlob {
+  return {
+    id,
+    parentId,
+    rootId,
+    blobId: blob.id,
+    name,
+    isDir: false,
+    size,
+    mime,
+    createdAt,
+    updatedAt,
+    blob,
   };
 }
 
 /**
  * @description Crea un nodo de directorio
- * @param id ID del nodo
- * @param parentId ID del nodo padre
- * @param name Nombre del nodo
- * @param hash Hash del nodo
- * @param size Tamaño del nodo
+ * @param param0 Parámetros para crear el nodo de directorio
  * @returns Nodo de directorio
  */
-export function createDirectoryNode(
-  id: string,
-  parentId: string | null,
-  name: string,
-  hash: string,
-  size: bigint,
-  metadata: { createdAt: Date; updatedAt: Date },
-): DirectoryNode {
+export function createDirectoryNode({
+  id,
+  parentId,
+  rootId,
+  name,
+  size,
+  createdAt,
+  updatedAt,
+}: CreateDirectoryNodeParams): DirectoryNode {
   return {
     id,
     parentId,
+    rootId,
+    blobId: null,
     name,
-    hash,
     isDir: true,
     size,
     mime: "inode/directory",
-    ...metadata,
+    createdAt,
+    updatedAt,
   };
 }
 
 /**
  * @description Crea un nodo de archivo ligero
- * @param id ID del nodo
- * @param parentId ID del nodo padre
- * @param name Nombre del nodo
- * @param hash Hash del nodo
- * @param size Tamaño del nodo
- * @param mime Tipo MIME del archivo
+ * @param param0 Parámetros para crear el nodo de archivo ligero
  * @returns Nodo de archivo ligero
  */
-export function createFileNodeLite(
-  id: string,
-  parentId: string | null,
-  name: string,
-  hash: string,
-  size: bigint,
-  mime: string,
-): FileNodeLite {
+export function createFileNodeLite({
+  id,
+  parentId,
+  rootId,
+  blobId,
+  name,
+  size,
+  mime,
+}: CreateFileNodeLiteParams): FileNodeLite {
   return {
     id,
     parentId,
+    rootId,
+    blobId,
     name,
-    hash,
     isDir: false,
     size,
     mime,
@@ -98,25 +131,22 @@ export function createFileNodeLite(
 
 /**
  * @description Crea un nodo de directorio ligero
- * @param id ID del nodo
- * @param parentId ID del nodo padre
- * @param name Nombre del nodo
- * @param hash Hash del nodo
- * @param size Tamaño del nodo
+ * @param param0 Parámetros para crear el nodo de directorio ligero
  * @returns Nodo de directorio ligero
  */
-export function createDirectoryNodeLite(
-  id: string,
-  parentId: string | null,
-  name: string,
-  hash: string,
-  size: bigint,
-): DirectoryNodeLite {
+export function createDirectoryNodeLite({
+  id,
+  parentId,
+  rootId,
+  name,
+  size,
+}: CreateDirectoryNodeLiteParams): DirectoryNodeLite {
   return {
     id,
     parentId,
+    rootId,
+    blobId: null,
     name,
-    hash,
     isDir: true,
     size,
     mime: "inode/directory",

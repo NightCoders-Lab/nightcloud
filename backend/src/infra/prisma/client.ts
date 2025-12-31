@@ -8,6 +8,8 @@ import {
   nodeAncestorsExtension,
   nodeDescendantsBulkExtension,
   nodeDescendantsExtension,
+  nodeDescendantsWithBlobExtension,
+  nodeDescendantsBulkWithBlobExtension,
   nodeSearchExtension,
 } from "./extensions";
 
@@ -27,6 +29,8 @@ export function createPrismaClient() {
     .$extends(nodeAncestorsExtension) // Agregar la extensión de ancestros
     .$extends(nodeAncestorsBulkExtension) // Agregar la extensión de ancestros masivos
     .$extends(nodeDescendantsExtension) // Agregar la extensión de descendientes
+    .$extends(nodeDescendantsWithBlobExtension) // Agregar la extensión de descendientes con blob
     .$extends(nodeDescendantsBulkExtension) // Agregar la extensión de descendientes masivos
+    .$extends(nodeDescendantsBulkWithBlobExtension) // Agregar la extensión de descendientes masivos con blob
     .$extends(nodeSearchExtension); // Agregar la extensión de búsqueda
 }

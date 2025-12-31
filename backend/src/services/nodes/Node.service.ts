@@ -1,9 +1,8 @@
-import crypto from "node:crypto";
-
 import { DB } from "@/config/db";
 import type {
   DirectoryNode,
   FileNode,
+  FileNodeWithBlob,
   Node,
   NodeLite,
 } from "@/domain/nodes/node";
@@ -13,8 +12,9 @@ import type { Prisma } from "@/infra/prisma/generated/client";
 import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
-import type { UploadManifestEntry } from "@/types/upload";
-import { AppError, NodeUtils } from "@/utils";
+import type { PendingMoves, UploadManifestEntry } from "@/types/upload";
+import { AppError, BlobUtils, NodeUtils } from "@/utils";
+import { withDeadlockRetry } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
 import { NodePersistenceService } from "./NodePersistence.service";
@@ -25,99 +25,161 @@ import { CloudStorageService } from "../cloud/CloudStorage.service";
  * @description Servicio para gestionar nodos (archivos y directorios).
  */
 export class NodeService {
-  private static readonly persistence = NodePersistenceService;
-  private static readonly cloud = CloudStorageService;
-  private static readonly identity = NodeIdentityService;
-  private static readonly repo = NodeRepository;
-  private static readonly prisma = DB.getClient();
-
-  /**
-   * @description Procesa múltiples archivos subidos, resolviendo sus identidades y persistiendo los nodos.
-   * @param uploadedFiles Array de archivos subidos
-   * @param parentId ID del nodo padre donde se ubicarán los nodos
-   * @param manifest Manifiesto de subida (opcional)
-   * @param isAborted Función para verificar si la request fue abortada
-   * @returns Array de nodos procesados
-   */
-  static async processUploadedFiles(
-    uploadedFiles: UploadedFile[],
-    parentId: Node["id"] | null,
-    manifest: UploadManifestEntry[] | null,
-    isAborted: () => boolean,
-  ) {
-    // Array para almacenar los nodos procesados
-    const results: Node[] = [];
-    // Mapa para relacionar rutas de archivos con sus parentId correspondientes
-    let fileParentMap = new Map<string, string | null>();
-
-    // Si hay manifiesto, construir el árbol de directorios y obtener el mapa de padres a asignar a los archivos
-    if (manifest) {
-      fileParentMap = await NodeTreeService.buildDirectoryTreeFromManifest(
-        manifest,
-        parentId,
-      );
-    }
-
-    // Procesar cada archivo subido
-    for (let i = 0; i < uploadedFiles.length; i++) {
-      if (isAborted()) throw new AppError("UPLOAD_ABORTED");
-
-      // Obtener el archivo y la entrada del manifiesto correspondiente (si existe)
-      const file = uploadedFiles[i];
-      const manifestEntry = manifest?.[i] ?? null;
-
-      // Si hay manifiesto, debe haber una entrada correspondiente
-      // segun lo programado en el frontend seria raro que no haya,
-      // asi que lanzamos error por si acaso
-      if (manifest && !manifestEntry) {
-        throw new AppError("MANIFEST_MISMATCH_ERROR");
-      }
-
-      // Determinar el parentId correcto para este archivo
-      const fileParentId = manifestEntry
-        ? fileParentMap.get(manifestEntry.path)!
-        : parentId;
-
-      // Procesar el archivo dentro de una transacción
-      const node = await this.prisma.$transaction(async (tx) => {
-        // Procesar el archivo y persistir el nodo
-        const res = await this.processTx(tx, file, fileParentId);
-
-        // Si el nodo tiene padre, actualizar el tamaño de todos los ancestros
-        if (res.parentId) {
-          await this.incrementNodeSizeByIdTx(tx, res.parentId, file.size);
-        }
-
-        return res;
-      });
-
-      results.push(node);
-    }
-
-    // Devolver los nodos procesados
-    return results;
+  private static get persistence() {
+    return NodePersistenceService;
+  }
+  private static get cloud() {
+    return CloudStorageService;
+  }
+  private static get identity() {
+    return NodeIdentityService;
+  }
+  private static get repo() {
+    return NodeRepository;
+  }
+  private static get prisma() {
+    return DB.getClient();
   }
 
   /**
-   * @description Procesa un archivo subido, resolviendo su identidad y persistiendo el nodo.
-   * @param tx PrismaTxClient
-   * @param file UploadedFile
-   * @param parentId ID del nodo padre donde se ubicará el nodo
+   * @description Procesa múltiples archivos subidos, persistiendo sus nodos y manejando movimientos en el almacenamiento.
+   * @param uploadedFiles Archivos subidos
+   * @param rootId ID del nodo raíz
+   * @param parentId ID del nodo padre
+   * @param manifest Manifiesto de carga (opcional)
+   * @param isAborted Función para verificar si la operación ha sido abortada
+   * @returns Nodos procesados
+   */
+  static async processUploadedFiles(
+    uploadedFiles: UploadedFile[],
+    rootId: Node["rootId"],
+    parentId: string,
+    manifest: UploadManifestEntry[] | null,
+    isAborted: () => boolean,
+  ) {
+    // Determinar el parentId final
+    const nodeParentId = parentId || rootId;
+    // Array para almacenar los nodos procesados
+    let finalResults: Node[] = [];
+    // Array para almacenar las operaciones finales de movimiento pendientes que se haran despues de procesar
+    let finalPendingMoves: PendingMoves[] = [];
+
+    await withDeadlockRetry(async () => {
+      // Array para almacenar las operaciones de movimiento pendientes de este intento
+      // Si este intento entra en deadlock no llegara al final y no se usaran estos movimientos
+      const attemptMoves: PendingMoves[] = [];
+      // Lo mismo con el mapa de parentId para este intento
+      const attemptFileParentMap = manifest
+        ? await NodeTreeService.buildDirectoryTreeFromManifest(
+            manifest,
+            rootId,
+            nodeParentId,
+          )
+        : null;
+      // Lo mismo tmb para los resultados de este intento
+      const attemptResults: Node[] = [];
+      // Mapa para almacenar las actualizaciones de tamaño por cada nodo padre
+      const sizeUpdates = new Map<string, bigint>();
+
+      // Procesar cada archivo subido
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        if (isAborted()) throw new AppError("UPLOAD_ABORTED");
+
+        // Obtener el archivo y la entrada del manifiesto correspondiente (si existe)
+        const file = uploadedFiles[i];
+        const manifestEntry = manifest?.[i] ?? null;
+
+        // Si hay manifiesto, debe haber una entrada correspondiente
+        // segun lo programado en el frontend seria raro que no haya,
+        // asi que lanzamos error por si acaso
+        if (manifest && !manifestEntry) {
+          throw new AppError("MANIFEST_MISMATCH_ERROR");
+        }
+
+        // Determinar el parentId correcto para este archivo
+        const fileParentId = manifestEntry
+          ? attemptFileParentMap!.get(manifestEntry.path)!
+          : nodeParentId;
+
+        // Procesar el archivo dentro de una transacción
+        const node = await this.prisma.$transaction(async (tx) => {
+          return await this.processTx(
+            tx,
+            file,
+            rootId,
+            fileParentId,
+            attemptMoves,
+          );
+        });
+
+        // Acumular la actualización de tamaño para el padre
+        if (node.parentId) {
+          const currentSize = sizeUpdates.get(node.parentId) || BigInt(0);
+          sizeUpdates.set(node.parentId, currentSize + BigInt(file.size));
+        }
+
+        // Agregar el nodo procesado a los resultados de este intento
+        attemptResults.push(node);
+      }
+
+      // Realizar las actualizaciones de tamaño acumuladas
+      if (sizeUpdates.size > 0) {
+        // Mediante una transacción iterar el mapa y actualizar los tamaños
+        await this.prisma.$transaction(async (tx) => {
+          for (const [pId, totalSize] of sizeUpdates) {
+            await this.incrementNodeSizeByIdTx(tx, pId, totalSize);
+          }
+        });
+      }
+
+      // Si salió bien (0 deadlock), asignar los movimientos pendientes de este intento a los finales
+      finalPendingMoves = attemptMoves;
+      // Asignar los resultados de este intento a los finales
+      finalResults = attemptResults;
+    });
+
+    // Realizar los movimientos de archivos pendientes
+    for (const { tmpPath, finalPath } of finalPendingMoves) {
+      if (!(await this.cloud.fileExists(tmpPath))) {
+        continue;
+      }
+
+      // Si el archivo ya existe en la ubicación final, eliminar el temporal
+      if (await this.cloud.fileExists(finalPath)) {
+        await this.cloud.delete(tmpPath);
+      } else {
+        // Si no existe, mover el archivo desde la ubicación temporal a la final
+        await this.cloud.move(tmpPath, finalPath);
+      }
+    }
+
+    // Devolver los nodos procesados
+    return finalResults;
+  }
+
+  /**
+   * @description Procesa un solo archivo subido, resolviendo su identidad y persistiendo el nodo.
+   * @param tx Transacción Prisma
+   * @param file Archivo subido
+   * @param rootId ID del nodo raíz
+   * @param parentId ID del nodo padre
+   * @param pendingMoves Arreglo para registrar movimientos pendientes de archivos
    * @returns Nodo procesado
    */
   static async processTx(
     tx: PrismaTxClient,
     file: UploadedFile,
-    parentId: Node["id"] | null,
+    rootId: Node["rootId"],
+    parentId: string,
+    pendingMoves: PendingMoves[],
   ) {
     try {
-      // Resolver nombre y hash unicos - SI se dan condiciones de carrera,
-      // persistTx no confiara en este resultado y iterara para conseguir uno unico
-      const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
-        tx,
-        file,
-        parentId,
+      // Calcular el hash del blob y el key de almacenamiento
+      const { blobHash, storageKey } = await BlobUtils.computeBlobIdentifiers(
+        file.path,
       );
+      // Generar un nombre de nodo único
+      const nodeName = await this.identity.resolveNameTx(tx, file, parentId);
 
       console.log(`Processing node: ${nodeName}`);
 
@@ -125,12 +187,14 @@ export class NodeService {
       const node = await this.persistence.persistTx(
         tx,
         file,
+        rootId,
         parentId,
+        pendingMoves,
+        { blobHash, storageKey },
         nodeName,
-        nodeHash,
       );
 
-      console.log(`Node processed: ${nodeName} as ${nodeHash}`);
+      console.log(`Node processed: ${nodeName}`);
       return node;
     } catch (err) {
       console.log(err);
@@ -147,17 +211,45 @@ export class NodeService {
     return await this.repo.create(nodeData);
   }
 
+  // Sobrecargas para getNodeDetails
+  static async getNodeDetails(
+    nodeId: Node["id"],
+    options?: { includeBlob?: false },
+  ): Promise<Node>;
+  static async getNodeDetails(
+    nodeId: Node["id"],
+    options: { includeBlob: true },
+  ): Promise<FileNodeWithBlob | Node>;
+
+  // Implementación de getNodeDetails
   /**
-   * @description Obtiene los detalles de un nodo por su ID.
+   * @description Obtiene los detalles de un nodo por su ID, con opción de incluir datos del blob.
    * @param nodeId ID del nodo a obtener
+   * @param options Opciones para incluir datos del blob
    * @returns Nodo con sus detalles
    */
-  static async getNodeDetails(nodeId: Node["id"]): Promise<Node> {
+  static async getNodeDetails(
+    nodeId: Node["id"],
+    options?: { includeBlob?: boolean },
+  ): Promise<Node | FileNodeWithBlob> {
     try {
-      const details = await this.repo.findById(nodeId);
-      if (!details) throw new AppError("NODE_NOT_FOUND");
+      let details;
+
+      // Determinar si se deben incluir los datos del blob
+      if (options?.includeBlob === true) {
+        details = await this.repo.findById(nodeId, { includeBlob: true });
+      } else {
+        details = await this.repo.findById(nodeId);
+      }
+
+      // Validación común para ambos casos
+      if (!details) {
+        throw new AppError("NODE_NOT_FOUND");
+      }
+
       return details;
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else
         throw new AppError(
@@ -167,15 +259,36 @@ export class NodeService {
     }
   }
 
+  // Sobrecargas para getNodeDetailsBulk
+  static async getNodesDetailsBulk(
+    nodeIds: Node["id"][],
+    options: { includeBlob: true },
+  ): Promise<(FileNodeWithBlob | Node)[]>;
+  static async getNodesDetailsBulk(
+    nodeIds: Node["id"][],
+    options?: { includeBlob?: false },
+  ): Promise<Node[]>;
+
+  // Implementación de getNodeDetailsBulk
   /**
    * @description Obtiene los detalles de múltiples nodos por sus IDs.
    * @param nodeIds Array de IDs de los nodos a obtener
    * @returns Array de nodos con sus detalles
    */
-  static async getNodesDetailsBulk(nodeIds: Node["id"][]): Promise<Node[]> {
+  static async getNodesDetailsBulk(
+    nodeIds: Node["id"][],
+    options?: { includeBlob?: boolean },
+  ): Promise<(Node | FileNodeWithBlob)[]> {
     try {
-      const nodes = await this.repo.findManyByIds(nodeIds);
-      return nodes;
+      let details;
+
+      if (options?.includeBlob === true) {
+        details = await this.repo.findManyByIds(nodeIds, { includeBlob: true });
+      } else {
+        details = await this.repo.findManyByIds(nodeIds);
+      }
+
+      return details;
     } catch (err) {
       if (err instanceof AppError) throw err;
       else
@@ -184,6 +297,15 @@ export class NodeService {
           `Error al obtener los detalles de los nodos`,
         );
     }
+  }
+
+  /**
+   * @description Obtiene el tamaño total de todos los nodos bajo una raíz específica.
+   * @param rootId ID del nodo raíz
+   * @returns Tamaño total de los nodos bajo la raíz
+   */
+  static async getRootSize(rootId: Node["rootId"]) {
+    return await this.repo.sumNodesSize(rootId);
   }
 
   /**
@@ -209,12 +331,15 @@ export class NodeService {
   }
 
   /**
-   * @description Crea un nuevo directorio (nodo) en la base de datos
-   * @param parentId ID del nodo padre donde se creara la carpeta
-   * @param name Nombre de la carpeta (opcional)
+   * @description Crea un directorio (nodo) nuevo.
+   * @param rootId ID del nodo raíz
+   * @param parentId ID del nodo padre
+   * @param name Nombre del directorio (puede ser null para usar un nombre por defecto)
+   * @returns Directorio creado (nodo) sin el hash
    */
   static async createDirectory(
-    parentId: string | null,
+    rootId: Node["rootId"],
+    parentId: string,
     name: string | null,
   ): Promise<Omit<Node, "hash">> {
     try {
@@ -231,23 +356,24 @@ export class NodeService {
 
         // En caso de que exista un directorio, resolvemos el nombre
         if (existentNode) {
-          finalName = await this.resolveName(parentId, finalName);
+          finalName = await this.identity.resolveNameTx(
+            tx,
+            existentNode,
+            parentId,
+          );
         }
 
         // Preparamos los datos para crear el directorio
-        const id = crypto.randomUUID() as string;
-        const hash = NodeUtils.genDirectoryHash(id);
         const mime = "inode/directory";
 
         // Tratamos de crear el directorio (nodo al fin)
 
         if (parentId) {
-          const { hash: _h, ...node } = await this.repo.createTx(tx, {
-            id,
+          const node = await this.repo.createTx(tx, {
             name: finalName,
-            hash,
             parent: { connect: { id: parentId } },
-            size: 0,
+            rootId,
+            size: 0n,
             mime,
             isDir: true,
           });
@@ -266,12 +392,11 @@ export class NodeService {
         }
 
         // Crear el directorio sin padre (raiz)
-        const { hash: _h, ...node } = await this.repo.createTx(tx, {
-          id,
+        const node = await this.repo.createTx(tx, {
           name: finalName,
-          hash,
-          parent: undefined,
-          size: 0,
+          parent: { connect: { id: rootId } },
+          rootId,
+          size: 0n,
           mime,
           isDir: true,
         });
@@ -300,7 +425,7 @@ export class NodeService {
         return await this.repo.updateNameByIdTx(tx, node.id, newName);
       } else {
         // Resolver nombre y hash unicos
-        const { nodeName, nodeHash } = await this.identity.resolveNodeFileTx(
+        const nodeName = await this.identity.resolveNameTx(
           tx,
           node,
           node.parentId,
@@ -308,10 +433,7 @@ export class NodeService {
         );
 
         // Actualizar el nodo en la base de datos
-        return await this.repo.updateIdentityByIdTx(tx, node.id, {
-          newName: nodeName,
-          newHash: nodeHash,
-        });
+        return await this.repo.updateNameByIdTx(tx, node.id, nodeName);
       }
     });
   }
@@ -321,8 +443,17 @@ export class NodeService {
    * @param id ID del nodo padre (null para la raiz)
    * @returns Array de nodos hijos
    */
-  static async getAllNodes(id: string | null = null) {
+  static async getAllNodes(id: string) {
     return await this.repo.findByParentId(id);
+  }
+
+  /**
+   * @description Obtiene todos los nodos desde la raiz de un usuario.
+   * @param rootId ID del nodo raíz del usuario
+   * @returns Array de nodos desde la raíz
+   */
+  static async getAllNodesFromRoot(rootId: string) {
+    return await this.repo.findAllFromRoot(rootId);
   }
 
   /**
@@ -333,11 +464,12 @@ export class NodeService {
    * @returns Array de nodos que coinciden con la búsqueda
    */
   static async searchNodesByName(
-    parentId: Node["parentId"],
+    rootId: Node["rootId"],
+    parentId: string,
     nameQuery: string,
     limit: number = 20,
   ) {
-    return await this.repo.search(parentId, nameQuery, limit);
+    return await this.repo.search(rootId, parentId, nameQuery, limit);
   }
 
   /**
@@ -356,21 +488,6 @@ export class NodeService {
   }
 
   /**
-   * @description Resuelve un nombre único para un nodo dentro de su carpeta padre.
-   * @param parentId ParentId del nodo a resolver
-   * @param name Nombre original del nodo a resolver
-   * @param newName Nuevo nombre propuesto (opcional)
-   * @returns string Nombre único resuelto
-   */
-  static async resolveName(
-    parentId: Node["parentId"],
-    name: Node["name"],
-    newName?: string,
-  ): Promise<string> {
-    return await this.identity.resolveName(parentId, name, newName);
-  }
-
-  /**
    * @description Copia un nodo (archivo o directorio) a una nueva ubicación.
    * @param node Nodo a copiar
    * @param parentId ID del nodo padre donde se ubicará la copia
@@ -379,7 +496,7 @@ export class NodeService {
    */
   static async copyNode(
     node: Node,
-    parentId: string | null,
+    parentId: string,
     newName?: string,
   ): Promise<NodeLite | NodeLite[]> {
     try {
@@ -409,7 +526,7 @@ export class NodeService {
    */
   static async bulkCopyNodes(
     nodes: Node[],
-    parentId: Node["parentId"],
+    parentId: string,
   ): Promise<NodeLite[]> {
     try {
       const copiedNodes: NodeLite[] = [];
@@ -444,7 +561,7 @@ export class NodeService {
    * @param newName Nuevo nombre propuesto para el nodo movido (opcional)
    * @returns Nodo movido
    */
-  static async moveNode(node: Node, parentId: string | null, newName?: string) {
+  static async moveNode(node: Node, parentId: string, newName?: string) {
     if (
       (parentId === node.parentId && (!newName || newName === node.name)) ||
       parentId === node.id
@@ -481,7 +598,7 @@ export class NodeService {
    */
   static async bulkMoveNodes(
     nodes: Node[],
-    parentId: Node["parentId"],
+    parentId: string,
   ): Promise<NodeLite[]> {
     try {
       const movedNodes: NodeLite[] = [];
@@ -514,6 +631,11 @@ export class NodeService {
    * @param node Nodo a eliminar
    */
   static async deleteNode(node: Node) {
+    // Prevenir la eliminación del nodo raíz
+    if (node.id === node.rootId) {
+      throw new AppError("DELETE_ROOT_NODE");
+    }
+
     if (node.isDir) {
       await NodeService.deleteDirectory(node);
     } else {
@@ -526,29 +648,20 @@ export class NodeService {
    * @param node Nodo a eliminar
    */
   static async deleteFileNode(node: FileNode) {
-    // Obtener la ruta del nodo
-    const nodePath = this.cloud.getFilePath(node);
-
     try {
-      // Eliminar el nodo del sistema de nodos
-      await this.cloud.delete(nodePath);
-
       // Usar transacción para eliminar el nodo y actualizar tamaños
       await this.prisma.$transaction(async (tx) => {
         // Si tiene padre, actualizar el tamaño de todos los ancestros que haya
         if (node.parentId) {
-          const parent = await this.repo.findByIdTx(tx, node.parentId);
-
-          if (parent) {
-            // Actualizar el tamaño de todos los ancestros
-            await this.decrementNodeSizeByIdTx(tx, node.parentId, node.size);
-          }
+          // Actualizar el tamaño de todos los ancestros
+          await this.decrementNodeSizeByIdTx(tx, node.parentId, node.size);
         }
 
         // Eliminar el registro del nodo en la base de datos
         await this.repo.deleteByIdTx(tx, node.id);
       });
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else throw new AppError("INTERNAL", "Error al eliminar el nodo");
     }
@@ -560,16 +673,7 @@ export class NodeService {
    * @returns Promise<void>
    */
   static async bulkDeleteFileNodes(nodes: FileNode[]) {
-    // Obtener las rutas de los nodos
-    const nodePaths = nodes.map((n) => this.cloud.getFilePath(n));
-
     try {
-      // Primer borrar fisico por si lanza error atraparlo antes de tocar la base de datos
-      // Eliminar los archivos del sistema de nodos
-      for (const path of nodePaths) {
-        await this.cloud.delete(path);
-      }
-
       return await this.prisma.$transaction(
         async (tx) => {
           for (const node of nodes) {
@@ -601,22 +705,23 @@ export class NodeService {
 
   /**
    * @description Realiza un rollback de nodos creados y archivos subidos en caso de error.
-   * @param createdNodes Array de nodos creados en la base de datos
-   * @param uploadedFiles Array de archivos subidos en el sistema de nodos
+   * @param createdNodes Nodos creados en la base de datos
+   * @param uploadedFiles Archivos subidos al sistema de almacenamiento
    */
   static async rollback(createdNodes: Node[], uploadedFiles: UploadedFile[]) {
     try {
       // Eliminar los archivos creados en el sistema de nodos
-      const tmpPaths = uploadedFiles.map((f) => f.path);
-      const nodePaths = createdNodes
-        .filter((n) => !n.isDir)
-        .map((n) => CloudStorageService.getFilePath(n));
-      await CloudStorageService.deleteFiles([...tmpPaths, ...nodePaths]);
+      const deleteTmpPromises = uploadedFiles.map(async (f) => {
+        await CloudStorageService.delete(f.path);
+      });
+      await Promise.all(deleteTmpPromises);
 
-      // Eliminar los nodos ya creados en la base de datos
-      const createdNodeIds = createdNodes.map((n) => n.id);
-      await this.repo.deleteManyByIds(createdNodeIds);
+      if (createdNodes.length > 0) {
+        const createdNodeIds = createdNodes.map((n) => n.id);
+        await this.repo.deleteManyByIds(createdNodeIds);
+      }
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else
         throw new AppError("INTERNAL", "Error al realizar rollback de nodos");
@@ -629,6 +734,11 @@ export class NodeService {
    */
   static async deleteDirectory(node: DirectoryNode) {
     try {
+      // Prevenir la eliminación del nodo raíz
+      if (node.id === node.rootId) {
+        throw new AppError("DELETE_ROOT_NODE");
+      }
+
       // Obtenemos los descendientes de la carpeta (incluyéndola)
       const descendants = await this.repo.getAllNodeDescendants(node.id);
 
@@ -641,24 +751,12 @@ export class NodeService {
         return;
       }
 
-      // Eliminar los archivos de la nube
-      // Ahora iterando para evitar borrar todos en caso de error en uno solo
-      for (const d of descendants) {
-        if (!d.isDir) {
-          await this.cloud.delete(this.cloud.getFilePath(d));
-        }
-      }
-
       // Usar transacción para actualizar los tamaños
       await this.prisma.$transaction(async (tx) => {
         // Si tiene padre, actualizar el tamaño del padre (propaga a ancestros)
         if (node.parentId) {
-          const parent = await this.repo.findByIdTx(tx, node.parentId);
-
-          if (parent) {
-            // Actualizar el tamaño del padre (propaga a ancestros)
-            await this.decrementNodeSizeByIdTx(tx, node.parentId, node.size);
-          }
+          // Actualizar el tamaño del padre (propaga a ancestros)
+          await this.decrementNodeSizeByIdTx(tx, node.parentId, node.size);
         }
 
         // Eliminamos los archivos y carpetas de la base de datos
@@ -668,6 +766,7 @@ export class NodeService {
         );
       });
     } catch (err) {
+      console.log(err);
       if (err instanceof AppError) throw err;
       else throw new AppError("INTERNAL", "Error al eliminar el nodo");
     }
@@ -701,6 +800,11 @@ export class NodeService {
     const fileNodes = nodes.filter((n) => !n.isDir);
     const dirNodes = nodes.filter((n) => n.isDir);
 
+    // Verificar que no se esté intentando eliminar nodos raíz
+    if (dirNodes.some((dir) => dir.id === dir.rootId)) {
+      throw new AppError("DELETE_ROOT_NODE");
+    }
+
     // Eliminar archivos primero
     if (fileNodes.length > 0) {
       await this.bulkDeleteFileNodes(fileNodes);
@@ -710,6 +814,17 @@ export class NodeService {
     if (dirNodes.length > 0) {
       await this.bulkDeleteDirectories(dirNodes);
     }
+  }
+
+  static async incrementNodeSizeById(
+    nodeId: Node["id"],
+    newSize: bigint,
+  ): Promise<Node> {
+    // Propagar el cambio de tamaño a los ancestros
+    await this.repo.propagateSizeToAncestors(nodeId, newSize, "increment");
+
+    // Retornamos el nodo actualizado, ya que sabemos que existe previamente le decimos a ts que no sera null
+    return (await this.repo.findById(nodeId))!;
   }
 
   /**

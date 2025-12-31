@@ -5,3 +5,9 @@ export type UploadManifestEntry = {
   size: string;
   mimeType: string;
 };
+
+// Type para movimientos pendientes de archivos subidos
+export type PendingMoves = {
+  tmpPath: string;
+  finalPath: string;
+};

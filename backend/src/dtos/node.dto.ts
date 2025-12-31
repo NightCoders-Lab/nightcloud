@@ -2,6 +2,7 @@
 export interface NodeDTO {
   id: string;
   parentId: string | null;
+  rootId: string;
   name: string;
   size: string;
   mime: string;
@@ -14,6 +15,7 @@ export interface NodeDTO {
 export interface NodeLiteDTO {
   id: string;
   parentId: string | null;
+  rootId: string;
   name: string;
   size: string;
   mime: string;
@@ -24,6 +26,7 @@ export interface NodeLiteDTO {
 export interface AncestorDTO {
   id: string;
   parentId: string | null;
+  rootId: string;
   name: string;
   size: string;
   mime: string;
@@ -35,6 +38,7 @@ export interface AncestorDTO {
 export interface DescendantDTO {
   id: string;
   parentId: string | null;
+  rootId: string;
   name: string;
   size: string;
   mime: string;
