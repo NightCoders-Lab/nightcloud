@@ -43,7 +43,7 @@ export function useSearchNode({
     if (!data || data.length === 0) return;
 
     setSearchResults(data);
-  }, [data, setSearchResults]);
+  }, [data, setSearchResults, name]);
 
   return {
     search: {
