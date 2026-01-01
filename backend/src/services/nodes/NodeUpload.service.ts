@@ -206,6 +206,14 @@ export class NodeUploadService {
       });
     });
 
+    // Si el nodo no es nuevo, lo agregamos a los movimientos para eliminar el archivo temporal despues
+    if (!isNew) {
+      ctx.attemptMoves.push({
+        tmpPath: file.path,
+        finalPath: storageKey,
+      });
+    }
+
     return { node, isNew, fileSize: file.size };
   }
 
