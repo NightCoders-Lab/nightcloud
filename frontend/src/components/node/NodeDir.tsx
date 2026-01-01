@@ -99,7 +99,7 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
           ? "opacity-40 cursor-grabbing border-dashed"
           : "opacity-100 scale-100",
         isOver ? "border-night-primary/40 bg-night-primary/20" : "",
-        "relative z-10 grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 items-center px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent cursor-default w-full hover:cursor-pointer"
+        "relative z-10 grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 items-center mb-1 px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent cursor-default w-full hover:cursor-pointer"
       )}
     >
       <Link

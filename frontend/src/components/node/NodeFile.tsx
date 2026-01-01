@@ -75,7 +75,7 @@ export default function NodeFile({ node }: Readonly<NodeFileProps>) {
         isDragging
           ? "opacity-40 cursor-grabbing border-dashed"
           : "opacity-100 scale-100",
-        "grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 items-center px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent select-none w-full"
+        "grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 mb-1 items-center px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent select-none w-full"
       )}
     >
       {/* Checkbox */}
