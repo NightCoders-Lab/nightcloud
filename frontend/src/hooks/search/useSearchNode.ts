@@ -28,7 +28,14 @@ export function useSearchNode({
     queryKey: ["nodes", "search", name.trim(), parentId ?? "global"],
     enabled: isEnabled, // Solo ejecutar si isEnabled es true
     placeholderData: (prevData) => prevData, // Usar datos previos como placeholder - evitar flashes de carga al quedarse sin datos
-    retry: 2, // Reintentar 2 veces en caso de fallo
+    retry: 1, // Reintentar 1 vez en caso de fallo
+
+    // Mantener datos en caché por 1 minuto por si el usuario vuelve a buscar lo mismo
+    staleTime: 1 * 60 * 1000,
+    // Mantener datos en memoria por 5 minutos antes de eliminarlos por si se vuelven a necesitar
+    gcTime: 5 * 60 * 1000,
+    // No refetch al cambiar de ventana
+    refetchOnWindowFocus: false,
   });
 
   // Actualizar los resultados de búsqueda en el estado global cuando cambien los datos
