@@ -12,7 +12,7 @@ export function parseManifest(raw: unknown, uploadedFilesCount: number) {
   if (typeof raw !== "string") return null;
 
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as string;
     if (!isUploadManifest(parsed)) return null;
 
     if (parsed.length !== uploadedFilesCount) {

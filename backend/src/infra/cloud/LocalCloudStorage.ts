@@ -28,12 +28,10 @@ export class LocalCloudStorage implements CloudStorage {
         process.cwd(),
         process.env.CLOUD_ROOT || "cloud",
       );
-
-      // Crear el directorio si no existe
-      if (!(await pathExists(LocalCloudStorage.cloudPath))) {
-        await fs.mkdir(LocalCloudStorage.cloudPath, { recursive: true });
-      }
     }
+
+    // Siempre crear el directorio si no existe
+    await fs.mkdir(LocalCloudStorage.cloudPath, { recursive: true });
 
     // Si ya fue inicializada, retornar la ruta
     return LocalCloudStorage.cloudPath;
@@ -51,12 +49,10 @@ export class LocalCloudStorage implements CloudStorage {
         process.cwd(),
         process.env.CLOUD_TMP || ".tmp",
       );
-
-      // Crear el directorio si no existe
-      if (!(await pathExists(LocalCloudStorage.tmpPath))) {
-        await fs.mkdir(LocalCloudStorage.tmpPath, { recursive: true });
-      }
     }
+
+    // Siempre crear el directorio si no existe
+    await fs.mkdir(LocalCloudStorage.tmpPath, { recursive: true });
 
     // Si ya fue inicializada, retornar la ruta
     return LocalCloudStorage.tmpPath;

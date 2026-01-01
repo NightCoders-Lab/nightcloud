@@ -1,22 +1,45 @@
 import { Prisma } from "@/infra/prisma/generated/client";
 
+type PgErrorLike = {
+  code?: unknown;
+  originalCode?: unknown;
+  cause?: PgErrorLike;
+  meta?: {
+    code?: unknown;
+    cause?: PgErrorLike;
+    driverAdapterError?: {
+      cause?: PgErrorLike;
+    };
+  };
+};
+
 /**
  * @description Extrae el código de error PostgreSQL de un error Prisma si está disponible
  * @param err Error del cual extraer el código
  * @returns Código de error PostgreSQL o undefined si no está disponible
  */
-export function extractPgCode(err: any): string | undefined {
-  return (
-    // PostgreSQL real (driver)
-    err?.meta?.driverAdapterError?.cause?.originalCode ??
-    err?.meta?.cause?.originalCode ??
-    err?.cause?.originalCode ??
+export function extractPgCode(err: unknown): string | undefined {
+  // Verificar que el error sea un objeto
+  if (typeof err !== "object" || err === null) {
+    return undefined;
+  }
+
+  // Castear el error a PgErrorLike para acceder a sus propiedades
+  const e = err as PgErrorLike;
+
+  // Intentar extraer el código de error PostgreSQL desde varias ubicaciones
+  const code = // PostgreSQL real (driver)
+    e?.meta?.driverAdapterError?.cause?.originalCode ??
+    e?.meta?.cause?.originalCode ??
+    e?.cause?.originalCode ??
     // A veces Prisma lo sube un nivel
-    err?.meta?.code ??
-    err?.cause?.code ??
+    e?.meta?.code ??
+    e?.cause?.code ??
     // Prisma (solo como fallback)
-    err?.code
-  );
+    e?.code;
+
+  // Retornar el código si es una cadena o undefined
+  return typeof code === "string" ? code : undefined;
 }
 
 /**
@@ -56,7 +79,7 @@ export async function withDeadlockRetry<T>(
       const res = await fn();
       console.log(`[deadlock-retry] success at attempt ${attempt}`);
       return res; // Retornar el resultado si tuvo éxito
-    } catch (err: any) {
+    } catch (err) {
       // Obtener el código de error PostgreSQL si existe
       const pgCode = extractPgCode(err);
 

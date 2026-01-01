@@ -16,6 +16,7 @@ import type { PrismaTxClient } from "@/types/prisma";
 import type { UploadManifestEntry } from "@/types/upload";
 import { AppError, NodeUtils } from "@/utils";
 import parseManifestPath from "@/utils/nodes/parseManifestPath";
+import { withDeadlockRetry } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
 
@@ -147,6 +148,10 @@ export class NodeTreeService {
     },
     cb?: (tx: PrismaTxClient, descendants: DescendantRow[]) => Promise<void>,
   ): Promise<NodeLite[]> {
+    // Ordenar los nodos por ID para evitar deadlocks
+    nodes.sort((a, b) => a.id.localeCompare(b.id));
+
+    // Transacción para "copiar" los nodos en la base de datos
     return await this.prisma.$transaction(
       async (tx) => {
         // Obtener todos los descendientes de TODOS los nodos a copiar
@@ -299,6 +304,10 @@ export class NodeTreeService {
     nodes: DirectoryNode[],
     parentId: Node["parentId"],
   ) {
+    // Ordenar los nodos por ID para evitar deadlocks
+    nodes.sort((a, b) => a.id.localeCompare(b.id));
+
+    // Simplemente reutilizar la función de copiado en modo "move"
     return await this.bulkCopyNodeDirs(
       nodes,
       parentId,
@@ -349,8 +358,13 @@ export class NodeTreeService {
       parentDataArray.map((pd) => [pd.oldId, { id: pd.newId }]),
     );
 
-    const nodesToCreate: NodeLite[] = [];
+    // Almacenar todos los nodos creados
+    const allNodesCreated: NodeLite[] = [];
+
     await NodeUtils.forEachDepthLevel(directories, async (depthNodes) => {
+      // Almacenar los nodos a crear de este nivel de profundidad
+      const currentDepthNodes: NodeLite[] = [];
+
       // Procesar todos los nodos en este nivel de profundidad
       for (const dirNode of depthNodes) {
         const id = crypto.randomUUID() as string;
@@ -360,7 +374,7 @@ export class NodeTreeService {
           id,
         });
 
-        nodesToCreate.push({
+        const newNode: NodeLite = {
           id,
           parentId: parent ? parent.id : null,
           rootId: dirNode.rootId,
@@ -369,15 +383,24 @@ export class NodeTreeService {
           size: dirNode.size,
           mime: "inode/directory",
           isDir: true,
-        });
+        };
+
+        // Guardar el nuevo nodo en la lista de nodos a crear
+        currentDepthNodes.push(newNode);
+
+        // Almacenar el nuevo nodo en la lista global de nodos creados
+        allNodesCreated.push(newNode);
       }
 
-      await this.repo.createManyTx(tx, nodesToCreate);
+      // Ahora crear todos los nodos de este nivel de profundidad en la base de datos
+      if (currentDepthNodes.length > 0) {
+        await this.repo.createManyTx(tx, currentDepthNodes);
+      }
     });
 
     return {
       dirMap,
-      nodesCreated: nodesToCreate,
+      nodesCreated: allNodesCreated,
     };
   }
 
@@ -461,46 +484,49 @@ export class NodeTreeService {
     // Si es un archivo y hay un nuevo nombre, asegurarse de que la extension del archivo se mantiene
     if (newName) newName = NodeUtils.ensureNodeExt(newName, node);
 
-    // Transacción para "mover" el nodo en la base de datos
-    return await this.prisma.$transaction(async (tx) => {
-      // Asegurarse de que la extension se mantenga igual si es
-      const nodeName = await this.identity.resolveNameTx(tx, node, parentId, {
-        newName,
+    // Usar retry para evitar deadlocks
+    return withDeadlockRetry(async () => {
+      // Transacción para "mover" el nodo en la base de datos
+      return await this.prisma.$transaction(async (tx) => {
+        // Asegurarse de que la extension se mantenga igual si es
+        const nodeName = await this.identity.resolveNameTx(tx, node, parentId, {
+          newName,
+        });
+
+        // Preparamos un resultado para devolver al frontend, ignorando el hash
+        const res = await this.repo.updateNameAndParentIdByIdTx(
+          tx,
+          node.id,
+          nodeName,
+          parentId,
+        );
+
+        // Si el nuevo padre no es null (root) y es diferente al actual, actualizar los tamaños de los ancestros
+        if (parentId !== node.parentId) {
+          // Decrementar el tamaño de los ancestros del padre antiguo si no es null (root)
+          if (node.parentId) {
+            await this.repo.propagateSizeToAncestorsTx(
+              tx,
+              node.parentId,
+              node.size,
+              "decrement",
+            );
+          }
+
+          // Incrementar el tamaño de los ancestros del nuevo padre si no es null (root)
+          if (parentId) {
+            await this.repo.propagateSizeToAncestorsTx(
+              tx,
+              parentId,
+              node.size,
+              "increment",
+            );
+          }
+        }
+
+        // Retornamos el nodo movido
+        return res;
       });
-
-      // Preparamos un resultado para devolver al frontend, ignorando el hash
-      const res = await this.repo.updateNameAndParentIdByIdTx(
-        tx,
-        node.id,
-        nodeName,
-        parentId,
-      );
-
-      // Si el nuevo padre no es null (root) y es diferente al actual, actualizar los tamaños de los ancestros
-      if (parentId !== node.parentId) {
-        // Decrementar el tamaño de los ancestros del padre antiguo si no es null (root)
-        if (node.parentId) {
-          await this.repo.propagateSizeToAncestorsTx(
-            tx,
-            node.parentId,
-            node.size,
-            "decrement",
-          );
-        }
-
-        // Incrementar el tamaño de los ancestros del nuevo padre si no es null (root)
-        if (parentId) {
-          await this.repo.propagateSizeToAncestorsTx(
-            tx,
-            parentId,
-            node.size,
-            "increment",
-          );
-        }
-      }
-
-      // Retornamos el nodo movido
-      return res;
     });
   }
 
@@ -514,72 +540,83 @@ export class NodeTreeService {
     nodes: FileNode[],
     parentId: FileNode["parentId"],
   ) {
-    // Transacción para "mover" los nodos en la base de datos
-    return await this.prisma.$transaction(
-      async (tx) => {
-        // Almacenar los nodos movidos
-        const movedNodes: Node[] = [];
+    // Usar retry para evitar deadlocks
+    return withDeadlockRetry(async () => {
+      // Transacción para "mover" los nodos en la base de datos
+      return await this.prisma.$transaction(
+        async (tx) => {
+          // Almacenar los nodos movidos
+          const movedNodes: Node[] = [];
 
-        // Almacenadores para los cambios de tamaño a propagar
-        const sizeDecrements = new Map<string, bigint>();
-        let totalSizeToIncrement = 0n;
+          // Almacenadores para los cambios de tamaño a propagar
+          const sizeDecrements = new Map<string, bigint>();
+          let totalSizeToIncrement = 0n;
 
-        // Iterar sobre todos los nodos a mover
-        for (const node of nodes) {
-          // Asegurarse de que la extension se mantenga igual si es
-          const nodeName = await this.identity.resolveNameTx(
-            tx,
-            node,
-            parentId,
-          );
+          // Iterar sobre todos los nodos a mover
+          for (const node of nodes) {
+            // Asegurarse de que la extension se mantenga igual si es
+            const nodeName = await this.identity.resolveNameTx(
+              tx,
+              node,
+              parentId,
+            );
 
-          // Preparamos un resultado para devolver al frontend, ignorando el hash
-          const res = await this.repo.updateNameAndParentIdByIdTx(
-            tx,
-            node.id,
-            nodeName,
-            parentId,
-          );
+            // Preparamos un resultado para devolver al frontend, ignorando el hash
+            const res = await this.repo.updateNameAndParentIdByIdTx(
+              tx,
+              node.id,
+              nodeName,
+              parentId,
+            );
 
-          // Si el nuevo padre no es null (root) y es diferente al actual, actualizar los tamaños de los ancestros
-          if (parentId !== node.parentId) {
-            // Decrementar el tamaño de los ancestros del padre antiguo si no es null (root)
-            if (node.parentId) {
-              const currentDec = sizeDecrements.get(node.parentId) || 0n;
-              sizeDecrements.set(node.parentId, currentDec + BigInt(node.size));
+            // Si el nuevo padre no es null (root) y es diferente al actual, actualizar los tamaños de los ancestros
+            if (parentId !== node.parentId) {
+              // Decrementar el tamaño de los ancestros del padre antiguo si no es null (root)
+              if (node.parentId) {
+                const currentDec = sizeDecrements.get(node.parentId) || 0n;
+                sizeDecrements.set(
+                  node.parentId,
+                  currentDec + BigInt(node.size),
+                );
+              }
+
+              // Incrementar el tamaño de los ancestros del nuevo padre
+              totalSizeToIncrement += BigInt(node.size);
             }
 
-            // Incrementar el tamaño de los ancestros del nuevo padre
-            totalSizeToIncrement += BigInt(node.size);
+            movedNodes.push(res);
           }
 
-          movedNodes.push(res);
-        }
-
-        // Propagar los tamaños decrementados a los ancestros correspondientes
-        for (const [oldParentId, size] of sizeDecrements) {
-          await this.repo.propagateSizeToAncestorsTx(
-            tx,
-            oldParentId,
-            size,
-            "decrement",
+          // Ordenar los IDs de los padres antiguos para evitar deadlocks
+          const sortedOldParentIds = Array.from(sizeDecrements.keys()).sort(
+            (a, b) => a.localeCompare(b),
           );
-        }
+          // Propagar los tamaños decrementados a los ancestros correspondientes
+          for (const oldParentId of sortedOldParentIds) {
+            const size = sizeDecrements.get(oldParentId)!;
+            await this.repo.propagateSizeToAncestorsTx(
+              tx,
+              oldParentId,
+              size,
+              "decrement",
+            );
+          }
 
-        // Propagar el tamaño incrementado a los ancestros del nuevo parentId
-        if (parentId && totalSizeToIncrement > 0n) {
-          await this.repo.propagateSizeToAncestorsTx(
-            tx,
-            parentId,
-            totalSizeToIncrement,
-            "increment",
-          );
-        }
+          // Propagar el tamaño incrementado a los ancestros del nuevo parentId
+          if (parentId && totalSizeToIncrement > 0n) {
+            await this.repo.propagateSizeToAncestorsTx(
+              tx,
+              parentId,
+              totalSizeToIncrement,
+              "increment",
+            );
+          }
 
-        return movedNodes;
-      },
-      { maxWait: 5000, timeout: 90000 }, // 90 segundos de timeout por si hay muchos nodos
-    );
+          return movedNodes;
+        },
+        { maxWait: 5000, timeout: 90000 }, // 90 segundos de timeout por si hay muchos nodos
+      );
+    });
   }
 
   /**

@@ -46,10 +46,10 @@ export interface FileNodeWithBlob extends FileNode {
 /**
  * @description Versión ligera de FileNode para evitar importar metadatos timestamp
  */
-export interface FileNodeLite extends Pick<
+export type FileNodeLite = Pick<
   FileNode,
   "id" | "parentId" | "rootId" | "blobId" | "name" | "size" | "mime" | "isDir"
-> {}
+>;
 
 // Nodo que representa un directorio
 /**
@@ -66,10 +66,10 @@ export interface DirectoryNode extends NodeBase {
 /**
  * @description Versión ligera de DirectoryNode para evitar importar metadatos timestamp
  */
-export interface DirectoryNodeLite extends Pick<
+export type DirectoryNodeLite = Pick<
   DirectoryNode,
   "id" | "parentId" | "rootId" | "blobId" | "name" | "size" | "mime" | "isDir"
-> {}
+>;
 
 // Tipo union de nodo, puede ser archivo o directorio
 export type Node = FileNode | DirectoryNode;

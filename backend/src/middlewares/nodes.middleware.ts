@@ -25,37 +25,36 @@ export const nodeUpload = (req: Request, res: Response, next: NextFunction) => {
   const { isAborted, cleanup } = NodeUtils.setupClientAbort(req);
 
   // Ejecutar el middleware de multer
-  upload(req, res, async (err: unknown) => {
-    // Remover el listener de abort ya que multer habra terminado a este punto
-    cleanup();
+  upload(req, res, (err: unknown) => {
+    (async () => {
+      // Remover el listener de abort ya que multer habra terminado a este punto
+      cleanup();
 
-    // Si la subida fue cancelada por el cliente, eliminar los archivos subidos
-    // writableEnded se usa para verificar si la respuesta ya fue enviada
-    if (isAborted() && req.files && !res.writableEnded) {
-      console.log("Upload aborted by client, cleaning up files...");
-      const files = req.files as Express.Multer.File[];
-      await FsUtils.cleanupUploadedFiles(files);
-      req.uploadError = new AppError("UPLOAD_ABORTED");
-      return next();
-    }
+      // Si la subida fue cancelada por el cliente, eliminar los archivos subidos
+      // writableEnded se usa para verificar si la respuesta ya fue enviada
+      if (isAborted() && req.files && !res.writableEnded) {
+        console.log("Upload aborted by client, cleaning up files...");
+        const files = req.files as Express.Multer.File[];
+        await FsUtils.cleanupUploadedFiles(files);
+        return next(new AppError("UPLOAD_ABORTED"));
+      }
 
-    // Manejar errores de multer y otros errores
-    if (err instanceof MulterError) {
-      req.uploadError = toAppError(err);
-      return next();
-    }
+      // Manejar errores de multer y otros errores
+      if (err instanceof MulterError) {
+        return next(toAppError(err));
+      }
 
-    if (err instanceof AppError) {
-      return next(err);
-    }
+      if (err instanceof AppError) {
+        return next(err);
+      }
 
-    if (err) {
-      console.log(err);
-      req.uploadError = new AppError("INTERNAL");
-      return next();
-    }
+      if (err) {
+        console.log(err);
+        return next(new AppError("INTERNAL"));
+      }
 
-    next();
+      next();
+    })().catch(next);
   });
 };
 
@@ -201,7 +200,7 @@ export const nodeExists = (options: { includeBlob?: boolean } = {}) => {
  */
 export const nodesExistBulk = (options: { includeBlob?: boolean } = {}) => {
   return async (
-    req: Request<{}, unknown, { nodeIds: string[] }>, // Se espera un body con nodeIds
+    req: Request<unknown, unknown, { nodeIds: string[] }>, // Se espera un body con nodeIds
     _res: Response,
     next: NextFunction,
   ) => {
@@ -248,7 +247,7 @@ export const nodesExistBulk = (options: { includeBlob?: boolean } = {}) => {
  * @param next NextFunction
  */
 export const nodeParseBulkIds = (
-  req: Request<{}, unknown, { nodeIds: string[] }>,
+  req: Request<unknown, unknown, { nodeIds: string[] }>,
   _res: Response,
   next: NextFunction,
 ) => {
@@ -257,7 +256,7 @@ export const nodeParseBulkIds = (
     if (typeof req.body?.nodeIds === "string") {
       // Intentar parsear el string como JSON
       try {
-        req.body.nodeIds = JSON.parse(req.body.nodeIds);
+        req.body.nodeIds = JSON.parse(req.body.nodeIds) as string[];
       } catch {
         // dejar que el validator falle si no se puede parsear
       }
