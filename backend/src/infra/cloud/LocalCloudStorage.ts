@@ -129,6 +129,13 @@ export class LocalCloudStorage implements CloudStorage {
     try {
       await fs.rmdir(dirPath);
     } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+
+      // Si el directorio no esta vacio evitamos loguear el error pq es innecesario en vd
+      if (e.code === "ENOTEMPTY" || e.code === "EEXIST") {
+        return;
+      }
+
       console.log("Error al eliminar directorio local:", err);
     }
   }
