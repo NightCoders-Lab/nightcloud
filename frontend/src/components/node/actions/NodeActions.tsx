@@ -1,4 +1,4 @@
-import type { NodeType } from "@/types";
+import type { NodeSearchType, NodeType } from "@/types";
 import {
   Transition,
   Menu,
@@ -19,7 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { downloadNode } from "@/api/NodeAPI";
 
 type NodeActionsProps = {
-  node: NodeType;
+  node: NodeType | NodeSearchType;
 };
 
 export default function NodeActions({ node }: Readonly<NodeActionsProps>) {

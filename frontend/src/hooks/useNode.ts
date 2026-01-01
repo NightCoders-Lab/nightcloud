@@ -42,15 +42,16 @@ export function useNode(nodeId: NodeType["id"] | undefined, mode: UseNodeMode) {
     queryKey: ["node", "details", nodeId],
     enabled: hasNodeId && includeNode, // Solo cargar si hay nodeId y se quiere el nodo
     placeholderData: (prevData) => prevData, // Usar datos previos como placeholder - evitar flashes de carga al quedarse sin datos
+    retry: 1, // Reintentar una vez en caso de error
   });
 
   // Consulta para obtener los hijos si es necesario
   const childrenQuery = useQuery({
     queryFn: getChildrenQueryFn(nodeId),
     queryKey: ["nodes", nodeId ?? "root"],
-    retry: 1,
     enabled: includeChildrens, // Solo cargar si se quieren hijos, independientemente de nodeId ya que puede ser root
     placeholderData: (prevData) => prevData, // Usar datos previos como placeholder - evitar flashes de carga al quedarse sin datos
+    retry: 1, // Reintentar una vez en caso de error
   });
 
   // Consulta para obtener los ancestros si es necesario
@@ -59,6 +60,7 @@ export function useNode(nodeId: NodeType["id"] | undefined, mode: UseNodeMode) {
     queryKey: ["ancestors", nodeId],
     enabled: hasNodeId && includeAncestors, // Solo cargar si hay nodeId y se quieren ancestros
     placeholderData: (prevData) => prevData, // Usar datos previos como placeholders - evitar flashes de carga al quedarse sin datos
+    retry: 1, // Reintentar una vez en caso de error
   });
 
   const descendantsQuery = useQuery({
@@ -66,6 +68,7 @@ export function useNode(nodeId: NodeType["id"] | undefined, mode: UseNodeMode) {
     queryKey: ["descendants", nodeId],
     enabled: hasNodeId && includeDescendants, // Solo cargar si hay nodeId y se quieren descendientes
     placeholderData: (prevData) => prevData, // Usar datos previos como placeholders - evitar flashes de carga al quedarse sin datos
+    retry: 1, // Reintentar una vez en caso de error
   });
 
   // Retornar los datos y estados de carga/error

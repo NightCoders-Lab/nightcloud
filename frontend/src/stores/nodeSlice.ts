@@ -1,10 +1,10 @@
 import type { StateCreator } from "zustand";
-import type { NodeType } from "@/types/index";
+import type { NodeSearchType, NodeType } from "@/types/index";
 
 export type NodeSliceType = {
-  selectedNodes: NodeType[];
-  addSelectedNodes: (nodes: NodeType[]) => void;
-  setSelectedNodes: (nodes: NodeType[]) => void;
+  selectedNodes: NodeType[] | NodeSearchType[];
+  addSelectedNodes: (nodes: NodeType[] | NodeSearchType[]) => void;
+  setSelectedNodes: (nodes: NodeType[] | NodeSearchType[]) => void;
   removeSelectedNode: (nodeId: NodeType["id"]) => void;
   clearSelectedNodes: () => void;
 };

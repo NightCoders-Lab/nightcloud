@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { NodeType } from "@/types";
+import type { NodeSearchType, NodeType } from "@/types";
 import getHumanFileType from "@/utils/files/getHumanFileType";
 import getHumanFileSize from "@/utils/files/getHumanFileSize";
 import { getCategoryFromMime } from "@/utils/files/getCategoryFromExtAndMime";
@@ -12,7 +12,7 @@ import { useDraggable } from "@dnd-kit/core";
 import classNames from "@/utils/classNames";
 
 type NodeFileProps = {
-  node: NodeType;
+  node: NodeType | NodeSearchType;
 };
 
 export default function NodeFile({ node }: Readonly<NodeFileProps>) {
@@ -43,7 +43,7 @@ export default function NodeFile({ node }: Readonly<NodeFileProps>) {
   const Icon = FileCategoryIcons[category];
 
   // Funciones de seleccion
-  const toggleSelect = (selectedNode: NodeType) => {
+  const toggleSelect = (selectedNode: NodeType | NodeSearchType) => {
     if (selectedNodes.some((node) => node.id === selectedNode.id)) {
       removeSelectedNode(selectedNode.id);
     } else {

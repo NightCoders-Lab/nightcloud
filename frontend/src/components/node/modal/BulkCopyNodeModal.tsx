@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Modal from "../../Modal";
-import NodeExplorer from "../NodeExplorer";
+import NodeExplorer from "../explorer/NodeExplorer";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
 import { bulkCopyNodes } from "@/api/BulkNodeAPI";
 import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";

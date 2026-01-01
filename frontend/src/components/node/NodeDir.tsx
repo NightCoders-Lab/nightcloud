@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { FaFolder } from "react-icons/fa6";
-import type { NodeType } from "@/types";
+import type { NodeSearchType, NodeType } from "@/types";
 import getHumanFileType from "@/utils/files/getHumanFileType";
 import getHumanFileSize from "@/utils/files/getHumanFileSize";
 import { Link } from "react-router-dom";
@@ -12,7 +12,7 @@ import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 type NodeDirProps = {
-  node: NodeType;
+  node: NodeType | NodeSearchType;
 };
 
 export default function NodeDir({ node }: Readonly<NodeDirProps>) {
@@ -57,7 +57,7 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
   }, [selectedNodes, node.id]);
 
   // Funciones de seleccion
-  const toggleSelect = (selectedNode: NodeType) => {
+  const toggleSelect = (selectedNode: NodeType | NodeSearchType) => {
     if (selectedNodes.some((node) => node.id === selectedNode.id)) {
       removeSelectedNode(selectedNode.id);
     } else {

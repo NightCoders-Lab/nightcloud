@@ -1,8 +1,8 @@
-import type { NodeType } from ".";
+import type { NodeSearchType, NodeType } from ".";
 
 export type ContextMenuRegistry = {
-  node: { selectedNode: NodeType };
-  nodes: { selectedNodes: NodeType[] };
+  node: { selectedNode: NodeType | NodeSearchType };
+  nodes: { selectedNodes: NodeType[] | NodeSearchType[] };
   nodeAreas: void;
   modal: void;
 };

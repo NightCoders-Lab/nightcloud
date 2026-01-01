@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Modal from "../../Modal";
-import NodeExplorer from "../NodeExplorer";
+import NodeExplorer from "../explorer/NodeExplorer";
 import { copyNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/useNode";
 import CopyNodeForm from "../form/CopyNodeForm";
@@ -11,6 +11,8 @@ import { useForm } from "react-hook-form";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
 import { useEffect } from "react";
 import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
+import LoadingModal from "@/components/LoadingModal";
+import ErrorModal from "@/components/ErrorModal";
 
 export default function CopyNodeModal() {
   const location = useLocation();
@@ -75,10 +77,20 @@ export default function CopyNodeModal() {
     mutate(data);
   };
 
+  if (node.loading) {
+    return <LoadingModal isOpen={isOpen} closeModal={closeModal} />;
+  }
+
   if (node.error) {
     toast.error(node.error.message);
     queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
-    return null;
+    return (
+      <ErrorModal
+        message={"An error occurred while loading, are you sure this file/folder exists?"}
+        isOpen={isOpen}
+        closeModal={closeModal}
+      />
+    );
   }
 
   // Usar una key dinámica para forzar el remount del formulario cuando el node.data cambia

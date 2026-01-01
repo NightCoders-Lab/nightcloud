@@ -5,7 +5,7 @@ import { useNode } from "@/hooks/useNode";
 import { useUploadFiles } from "@/hooks/upload/useUploadFiles";
 import UploadStagingList from "./UploadStagingList";
 import { useMemo } from "react";
-import NodeExplorer from "../node/NodeExplorer";
+import NodeExplorer from "../node/explorer/NodeExplorer";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
 import { useUploadStage } from "@/hooks/upload/useUploadStage";
 

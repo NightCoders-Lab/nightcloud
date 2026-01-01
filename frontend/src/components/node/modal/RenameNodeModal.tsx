@@ -9,6 +9,8 @@ import { useNode } from "@/hooks/useNode";
 import RenameNodeForm from "../form/RenameNodeForm";
 import { useEffect } from "react";
 import ErrorMessage from "../../ErrorMessage";
+import LoadingModal from "@/components/LoadingModal";
+import ErrorModal from "@/components/ErrorModal";
 
 export default function RenameNodeModal() {
   const location = useLocation();
@@ -34,6 +36,18 @@ export default function RenameNodeModal() {
     formState: { errors },
     setFocus,
   } = useForm({ defaultValues: initialValues });
+
+  // Auto focus the name input when the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      // Use a timeout to wait for the Modal animation
+      const timer = setTimeout(() => {
+        // Focus the specific field name registered in CreateFolderForm
+        setFocus("name");
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, setFocus]);
 
   const { mutate } = useMutation({
     mutationFn: (data: NodeRenameFormData & { nodeId: NodeType["id"] }) =>
@@ -86,17 +100,21 @@ export default function RenameNodeModal() {
     mutate(data);
   };
 
-  // Auto focus the name input when the modal opens
-  useEffect(() => {
-    if (isOpen) {
-      // Use a timeout to wait for the Modal animation
-      const timer = setTimeout(() => {
-        // Focus the specific field name registered in CreateFolderForm
-        setFocus("name");
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, setFocus]);
+  if (node.loading) {
+    return <LoadingModal isOpen={isOpen} closeModal={closeModal} />;
+  }
+
+  if (node.error) {
+    toast.error(node.error.message);
+    queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
+    return (
+      <ErrorModal
+        message={"An error occurred while loading, are you sure this file/folder exists?"}
+        isOpen={isOpen}
+        closeModal={closeModal}
+      />
+    );
+  }
 
   const modalTitle = `Rename ${node.data?.isDir ? "Folder" : "File"}`;
   return (

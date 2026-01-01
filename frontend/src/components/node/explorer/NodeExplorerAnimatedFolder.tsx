@@ -7,7 +7,7 @@ type NodeExplorerFolderProps = {
   node: NodeType;
   enterFolder: (node: NodeType) => void;
 };
-export default function NodeExplorerFolder({
+export default function NodeExplorerAnimatedFolder({
   node,
   enterFolder,
 }: Readonly<NodeExplorerFolderProps>) {
@@ -38,7 +38,7 @@ export default function NodeExplorerFolder({
                   duration: 0.185,
                 }}
               >
-                <FaFolderOpen size={24} className="shrink-0" />
+                <FaFolderOpen size={22} className="shrink-0" />
               </motion.span>
             ) : (
               <motion.span

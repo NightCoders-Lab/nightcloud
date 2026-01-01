@@ -4,6 +4,8 @@ import { toast } from "react-toastify";
 import Modal from "../../Modal";
 import { deleteNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/useNode";
+import LoadingModal from "@/components/LoadingModal";
+import ErrorModal from "@/components/ErrorModal";
 
 export default function DeleteNodeModal() {
   const location = useLocation();
@@ -45,10 +47,20 @@ export default function DeleteNodeModal() {
     mutate();
   };
 
+  if (node.loading) {
+    return <LoadingModal isOpen={isOpen} closeModal={closeModal} />;
+  }
+
   if (node.error) {
     toast.error(node.error.message);
     queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
-    return null;
+    return (
+      <ErrorModal
+        message={"An error occurred while loading, are you sure this file/folder exists?"}
+        isOpen={isOpen}
+        closeModal={closeModal}
+      />
+    );
   }
 
   return (
@@ -57,8 +69,7 @@ export default function DeleteNodeModal() {
       open={isOpen}
       close={closeModal}
     >
-      {node.loading && <p className="mt-2">Loading...</p>}
-      {!node.loading && node.data && (
+      {node.data && (
         <div className="mt-5 space-y-10">
           <p className="text-night-muted tracking-wider">
             {node.data.isDir ? (

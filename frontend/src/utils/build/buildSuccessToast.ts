@@ -1,11 +1,11 @@
-import type { NodeLiteType, NodeType } from "@/types";
+import type { NodeLiteType, NodeSearchType, NodeType } from "@/types";
 import { toast } from "react-toastify";
 
 type OperationAction = "copy" | "move" | "delete" | "download";
 
 export function buildSuccessToast(
   action: OperationAction,
-  data: NodeType | NodeType[] | NodeLiteType | NodeLiteType[]
+  data: NodeType | NodeType[] | NodeLiteType | NodeLiteType[] | NodeSearchType | NodeSearchType[]
 ) {
   let files = 0;
   let folders = 0;
