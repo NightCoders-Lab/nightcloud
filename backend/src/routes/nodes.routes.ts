@@ -7,6 +7,11 @@ import {
   nodeExists,
   validateRequest,
 } from "@/middlewares";
+import {
+  nodeParentExists,
+  nodeParseBulkIds,
+  nodesExistBulk,
+} from "@/middlewares/nodes.middleware";
 import { NodeValidators } from "@/validators";
 
 /**
@@ -20,8 +25,17 @@ router.post(
   NodeValidators.nodeParentIdValidator,
   validateRequest,
   nodeUpload,
+  nodeParentExists(),
   nodeProcess,
   NodeController.uploadNodes,
+);
+
+// Buscar nodos por nombre
+router.get(
+  "/search",
+  NodeValidators.nodeSearchValidator,
+  validateRequest,
+  NodeController.searchNode,
 );
 
 // Crear un nodo (archivo/carpeta)
@@ -35,22 +49,76 @@ router.post(
 // Obtener nodos desde la raíz de la nube (/cloud)
 router.get("/", NodeController.getNodesFromRoot);
 
+// -----------------
+// Operaciones bulk
+// -----------------
+
+// Descargar varios nodos
+router.post(
+  "/bulk/download",
+  nodeParseBulkIds,
+  NodeValidators.nodeIdsValidator,
+  validateRequest,
+  nodesExistBulk({ includeBlob: true }),
+  NodeController.bulkDownloadNodes,
+);
+
+// Copiar varios nodos
+router.post(
+  "/bulk/copy",
+  NodeValidators.nodeBulkCopyValidator,
+  validateRequest,
+  nodesExistBulk(),
+  NodeController.bulkCopyNodes,
+);
+
+// Mover varios nodos
+router.post(
+  "/bulk/move",
+  NodeValidators.nodeBulkMoveValidator,
+  validateRequest,
+  nodesExistBulk(),
+  NodeController.bulkMoveNodes,
+);
+
+// Borrar varios nodos
+router.post(
+  "/bulk/delete",
+  NodeValidators.nodeBulkDeleteValidator,
+  validateRequest,
+  nodesExistBulk(),
+  NodeController.bulkDeleteNodes,
+);
+
+// -----------------
+// Operaciones single
+// -----------------
+
 // Descargar nodo por ID
 router.get(
   "/download/:nodeId",
   NodeValidators.nodeIdValidator, // Validation chain
   validateRequest, // Validate any errors from express-validator
-  nodeExists,
+  nodeExists({ includeBlob: true }),
   NodeController.downloadNode,
 );
 
-// Borrar nodo por ID
-router.delete(
-  "/:nodeId",
-  NodeValidators.nodeIdValidator, // Validation chain
-  validateRequest, // Validate any errors from express-validator
-  nodeExists,
-  NodeController.deleteNode,
+// Obtener ancestros de un nodo por ID
+router.get(
+  "/:nodeId/ancestors",
+  NodeValidators.nodeIdValidator,
+  validateRequest,
+  nodeExists(),
+  NodeController.getNodeAncestors,
+);
+
+// Obtener descendientes de un nodo por ID
+router.get(
+  "/:nodeId/descendants",
+  NodeValidators.nodeIdValidator,
+  validateRequest,
+  nodeExists(),
+  NodeController.getNodeDescendants,
 );
 
 // Renombrar nodo por ID
@@ -58,7 +126,7 @@ router.patch(
   "/:nodeId/rename",
   NodeValidators.nodeNewNameValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.renameNode,
 );
 
@@ -67,7 +135,7 @@ router.post(
   "/:nodeId/copy",
   NodeValidators.nodeCopyValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.copyNode,
 );
 
@@ -76,8 +144,17 @@ router.post(
   "/:nodeId/move",
   NodeValidators.nodeMoveValidator,
   validateRequest,
-  nodeExists,
+  nodeExists(),
   NodeController.moveNode,
+);
+
+// Obtener detalles de un nodo por ID
+router.get(
+  "/:nodeId/details",
+  NodeValidators.nodeCopyValidator,
+  validateRequest,
+  nodeExists(),
+  NodeController.getNodeDetails,
 );
 
 // Obtener nodos de un directorio en especifico
@@ -85,8 +162,17 @@ router.get(
   "/:nodeId",
   NodeValidators.nodeIdValidator, // Validation chain
   validateRequest, // Validate any errors from express-validator
-  nodeExists,
+  nodeExists(),
   NodeController.getNodesFromDirectory,
+);
+
+// Borrar nodo por ID
+router.delete(
+  "/:nodeId",
+  NodeValidators.nodeIdValidator, // Validation chain
+  validateRequest, // Validate any errors from express-validator
+  nodeExists(),
+  NodeController.deleteNode,
 );
 
 export default router;

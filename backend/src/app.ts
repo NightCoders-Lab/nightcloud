@@ -17,6 +17,7 @@ export function createApp(): Express {
   app.use(cors(corsConfig));
 
   // Global middlewares
+  app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
   app.use(express.json());
   app.use(cookieParser());
   app.use(success);

@@ -1,16 +1,19 @@
+import type { FileNodeWithBlob } from "@/domain/nodes/node";
 import { CloudStorageService } from "@/services/cloud/CloudStorage.service";
+import { buildLocalStorageKeyFromHash } from "@/utils/blob/buildLocalStorageKeyFromHash";
 
 import type { ZipEntryType } from "../download/zip-stream.types";
-import type { DescendantRow } from "../prisma/types";
+import { isFileNodeWithBlob } from "../guards/node";
+import type { DescendantRowWithBlob } from "../prisma/types";
 
 /**
- * @description Mapea un nodo de descendiente a una entrada de zip.
- * @param node Nodo de descendiente a mapear
+ * @description Mapea un nodo a una entrada de zip.
+ * @param node Nodo a mapear
  * @param relativePath Ruta relativa dentro del zip
- * @returns Entrada de zip mapeada
+ * @returns Entrada de zip correspondiente
  */
 export function toZipEntry(
-  node: DescendantRow,
+  node: FileNodeWithBlob | DescendantRowWithBlob,
   relativePath: string,
 ): ZipEntryType {
   return node.isDir
@@ -21,6 +24,10 @@ export function toZipEntry(
     : {
         isDir: false,
         relativePath,
-        physicalPath: CloudStorageService.getFilePath(node),
+        physicalPath: isFileNodeWithBlob(node)
+          ? CloudStorageService.getFilePath(node.blob)
+          : CloudStorageService.getFilePath(
+              buildLocalStorageKeyFromHash(node.blobHash!), // storageKey construido desde el hash
+            ),
       };
 }

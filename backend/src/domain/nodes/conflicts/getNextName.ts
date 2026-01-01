@@ -56,3 +56,25 @@ export function getNextName(targetName: string, existingNames: string[]) {
   // Retornamos el nuevo nombre con el sufijo incrementado en 1
   return `${fileBase} (${maxSuffix + 1})${fileExt}`;
 }
+
+/**
+ * @description Genera un nuevo nombre incrementando el indice en 1
+ * @param name Nombre original
+ * @returns Nombre con indice incrementado
+ */
+export function getNextNameWithIndex(name: string): string {
+  const match = new RegExp(/^(.*?)(?: \((\d+)\))?((?:\.[^.]+)*)$/).exec(name);
+
+  if (!match) {
+    // fallback ultra defensivo
+    return `${name} (1)`;
+  }
+
+  const base = match[1];
+  const currentIndex = match[2] ? Number(match[2]) : 0;
+  const ext = match[3] ?? "";
+
+  const nextIndex = currentIndex + 1;
+
+  return `${base} (${nextIndex})${ext}`;
+}

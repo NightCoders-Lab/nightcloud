@@ -1,6 +1,7 @@
 import { Router, type Express } from "express";
 
 // Import all routes
+import Cloud from "@/routes/cloud.routes";
 import Nodes from "@/routes/nodes.routes";
 
 export function registerV1Routes(app: Express) {
@@ -12,6 +13,9 @@ export function registerV1Routes(app: Express) {
 
   // Nodes routes
   v1.use("/nodes", Nodes);
+
+  // Cloud routes
+  v1.use("/cloud", Cloud);
 
   // Health check endpoint
   v1.use("/health", (_req, res) => {

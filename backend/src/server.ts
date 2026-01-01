@@ -2,6 +2,8 @@ import "dotenv/config";
 import { createApp } from "@/app";
 import { DB } from "@/config/db";
 
+import { startInfraCronJobs } from "./infra/scheduler/cron";
+
 /**
  *  Inicializa la aplicación, conecta a la base de datos y arranca el servidor
  */
@@ -18,6 +20,9 @@ async function initApp() {
     app.listen(port, () => {
       console.log("Server is running on port", port);
     });
+
+    // Start scheduled cron jobs
+    startInfraCronJobs();
   } catch (err) {
     console.error(err);
     process.exit(1);

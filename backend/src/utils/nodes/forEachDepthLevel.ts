@@ -1,4 +1,4 @@
-import { AncestorRow, DescendantRow } from "@/infra/prisma/types";
+import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
 
 type NodeDepthTree = (AncestorRow | DescendantRow)[];
 
