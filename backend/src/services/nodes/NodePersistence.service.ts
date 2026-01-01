@@ -25,6 +25,11 @@ type PersistNodeParams = {
   initialNodeName: string;
 };
 
+type PersistResult = {
+  node: Node;
+  isNew: boolean;
+};
+
 type CreateNodeAndRegisterMoveParams = {
   tx: PrismaTxClient;
   file: UploadedFile;
@@ -62,7 +67,7 @@ export class NodePersistenceService {
     parentId,
     pendingMoves,
     initialNodeName,
-  }: PersistNodeParams): Promise<Node> {
+  }: PersistNodeParams): Promise<PersistResult> {
     let attempt = 0; // Contador de intentos para nombres/hashes únicos
     let maxAttempts = 50; // Número máximo de intentos permitidos
     // Nombre del nodo que se intentará crear
@@ -86,7 +91,10 @@ export class NodePersistenceService {
       if (existingNode) {
         // Idempotencia: Si es el mismo archivo, devolvemos el existente
         if (!existingNode.isDir && existingNode.blob?.hash === blob.hash) {
-          return fromPrismaNode(existingNode);
+          return {
+            node: fromPrismaNode(existingNode),
+            isNew: false, // No es nuevo, ya existía, por ende retornamos false para no actualizar sizes
+          };
         }
 
         // Conflicto Real: Calculamos nuevo nombre y reintentamos en la siguiente vuelta
@@ -112,7 +120,7 @@ export class NodePersistenceService {
 
       // SI NO EXISTE: Intentamos crear
       try {
-        return await this.createNodeAndRegisterMove({
+        const node = await this.createNodeAndRegisterMove({
           tx,
           file,
           blob,
@@ -121,8 +129,12 @@ export class NodePersistenceService {
           nodeName,
           pendingMoves,
         });
+        return {
+          node,
+          isNew: true, // Es nuevo, fue creado, por ende retornamos true para actualizar sizes
+        };
       } catch (err) {
-        // CASO BORDE (Race Condition):
+        // EDGE CASE (Race Condition):
         // Si entre el findUnique (paso 1) y el create (paso 3) otro proceso insertó el archivo,
         // create fallará y abortará la transacción.
 

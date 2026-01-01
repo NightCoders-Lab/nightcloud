@@ -11,7 +11,7 @@ export type PrismaTxClient = Parameters<
 export type PrismaBatchPayload = Prisma.BatchPayload;
 
 // Tipos del modelo Node de Prisma
-export type PrismaNode = Prisma.NodeGetPayload<{}>;
+export type PrismaNode = Prisma.NodeGetPayload<object>;
 export type PrismaNodeCreateInput = Prisma.NodeCreateInput;
 export type PrismaNodeCreateManyInput = Prisma.NodeCreateManyInput;
 export type PrismaNodeUpdateInput = Prisma.NodeUpdateInput;
@@ -20,6 +20,6 @@ export type PrismaNodeWithBlob = Prisma.NodeGetPayload<{
 }>;
 
 // Tipos del modelo Blob de Prisma
-export type PrismaBlob = Prisma.BlobGetPayload<{}>;
+export type PrismaBlob = Prisma.BlobGetPayload<object>;
 export type PrismaBlobCreateInput = Prisma.BlobCreateInput;
 export type PrismaBlobUpdateInput = Prisma.BlobUpdateInput;

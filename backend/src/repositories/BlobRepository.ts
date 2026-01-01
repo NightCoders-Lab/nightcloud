@@ -103,11 +103,11 @@ export class BlobRepository {
    * @param attempts Número de intentos realizados
    * @param maxRetries Número máximo de reintentos permitidos
    */
-  private static async validateRetry(
+  private static validateRetry(
     err: unknown,
     attempts: number,
     maxRetries: number,
-  ): Promise<void> {
+  ): void {
     // Verificamos si es un error de deadlock
     const isDeadlock =
       (err as NodeJS.ErrnoException).code === "P2034" ||

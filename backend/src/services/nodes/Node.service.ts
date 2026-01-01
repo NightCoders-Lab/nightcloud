@@ -1,5 +1,4 @@
 import { DB } from "@/config/db";
-import type { Blob } from "@/domain/blobs/blob";
 import type {
   DirectoryNode,
   FileNode,
@@ -11,29 +10,21 @@ import type { UploadedFile } from "@/domain/uploads/uploaded-file";
 import { isDirectoryNode, isDirectoryNodeLite } from "@/infra/guards/node";
 import type { Prisma } from "@/infra/prisma/generated/client";
 import type { AncestorRow, DescendantRow } from "@/infra/prisma/types";
-import { BlobRepository } from "@/repositories/BlobRepository";
 import { NodeRepository } from "@/repositories/NodeRepository";
 import type { PrismaTxClient } from "@/types/prisma";
-import type { PendingMoves, UploadManifestEntry } from "@/types/upload";
-import { AppError, BlobUtils, NodeUtils } from "@/utils";
+import type { UploadManifestEntry } from "@/types/upload";
+import { AppError, NodeUtils } from "@/utils";
 import { sanitizeSearchQuery } from "@/utils/nodes/sanitizeSearchQuery";
-import { withDeadlockRetry } from "@/utils/prisma";
 
 import { NodeIdentityService } from "./NodeIdentity.service";
-import { NodePersistenceService } from "./NodePersistence.service";
 import { NodeTreeService } from "./NodeTree.service";
+import { NodeUploadService } from "./NodeUpload.service";
 import { CloudStorageService } from "../cloud/CloudStorage.service";
 
 /**
  * @description Servicio para gestionar nodos (archivos y directorios).
  */
 export class NodeService {
-  private static get persistence() {
-    return NodePersistenceService;
-  }
-  private static get cloud() {
-    return CloudStorageService;
-  }
   private static get identity() {
     return NodeIdentityService;
   }
@@ -43,8 +34,8 @@ export class NodeService {
   private static get prisma() {
     return DB.getClient();
   }
-  private static get blobRepo() {
-    return BlobRepository;
+  private static get upload() {
+    return NodeUploadService;
   }
 
   /**
@@ -58,160 +49,18 @@ export class NodeService {
    */
   static async processUploadedFiles(
     uploadedFiles: UploadedFile[],
-    rootId: Node["rootId"],
+    rootId: string,
     parentId: string,
     manifest: UploadManifestEntry[] | null,
     isAborted: () => boolean,
   ) {
-    // Determinar el parentId final
-    const nodeParentId = parentId || rootId;
-    // Array para almacenar los nodos procesados
-    let finalResults: Node[] = [];
-    // Array para almacenar las operaciones finales de movimiento pendientes que se haran despues de procesar
-    let finalPendingMoves: PendingMoves[] = [];
-
-    await withDeadlockRetry(async () => {
-      // Array para almacenar las operaciones de movimiento pendientes de este intento
-      // Si este intento entra en deadlock no llegara al final y no se usaran estos movimientos
-      const attemptMoves: PendingMoves[] = [];
-      // Lo mismo con el mapa de parentId para este intento
-      const attemptFileParentMap = manifest
-        ? await NodeTreeService.buildDirectoryTreeFromManifest(
-            manifest,
-            rootId,
-            nodeParentId,
-          )
-        : null;
-      // Lo mismo tmb para los resultados de este intento
-      const attemptResults: Node[] = [];
-      // Mapa para almacenar las actualizaciones de tamaño por cada nodo padre
-      const sizeUpdates = new Map<string, bigint>();
-
-      // Procesar cada archivo subido
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        if (isAborted()) throw new AppError("UPLOAD_ABORTED");
-
-        // Obtener el archivo y la entrada del manifiesto correspondiente (si existe)
-        const file = uploadedFiles[i];
-        const manifestEntry = manifest?.[i] ?? null;
-
-        // Si hay manifiesto, debe haber una entrada correspondiente
-        // segun lo programado en el frontend seria raro que no haya,
-        // asi que lanzamos error por si acaso
-        if (manifest && !manifestEntry) {
-          throw new AppError("MANIFEST_MISMATCH_ERROR");
-        }
-
-        // Determinar el parentId correcto para este archivo
-        const fileParentId = manifestEntry
-          ? attemptFileParentMap!.get(manifestEntry.path)!
-          : nodeParentId;
-
-        // Calcular el hash del blob y el key de almacenamiento
-        const { blobHash, storageKey } = await BlobUtils.computeBlobIdentifiers(
-          file.path,
-        );
-
-        // Primero aseguramos el blob en la base de datos
-        const blob = await this.blobRepo.ensureBlob({
-          hash: blobHash,
-          size: BigInt(file.size),
-          mime: file.mimetype,
-          storageKey: storageKey,
-        });
-
-        // Procesar el archivo dentro de una transacción
-        const node = await this.prisma.$transaction(async (tx) => {
-          return await this.processTx(
-            tx,
-            file,
-            blob,
-            rootId,
-            fileParentId,
-            attemptMoves,
-          );
-        });
-
-        // Acumular la actualización de tamaño para el padre
-        if (node.parentId) {
-          const currentSize = sizeUpdates.get(node.parentId) || BigInt(0);
-          sizeUpdates.set(node.parentId, currentSize + BigInt(file.size));
-        }
-
-        // Agregar el nodo procesado a los resultados de este intento
-        attemptResults.push(node);
-      }
-
-      // Realizar las actualizaciones de tamaño acumuladas
-      if (sizeUpdates.size > 0) {
-        // Mediante una transacción iterar el mapa y actualizar los tamaños
-        await this.prisma.$transaction(async (tx) => {
-          for (const [pId, totalSize] of sizeUpdates) {
-            await this.incrementNodeSizeByIdTx(tx, pId, totalSize);
-          }
-        });
-      }
-
-      // Si salió bien (0 deadlock), asignar los movimientos pendientes de este intento a los finales
-      finalPendingMoves = attemptMoves;
-      // Asignar los resultados de este intento a los finales
-      finalResults = attemptResults;
-    });
-
-    // Realizar los movimientos de archivos pendientes
-    for (const { tmpPath, finalPath } of finalPendingMoves) {
-      if (!(await this.cloud.fileExists(tmpPath))) {
-        continue;
-      }
-
-      // Si el archivo ya existe en la ubicación final, eliminar el temporal
-      if (await this.cloud.fileExists(finalPath)) {
-        await this.cloud.delete(tmpPath);
-      } else {
-        // Si no existe, mover el archivo desde la ubicación temporal a la final
-        await this.cloud.move(tmpPath, finalPath);
-      }
-    }
-
-    // Devolver los nodos procesados
-    return finalResults;
-  }
-
-  /**
-   * @description Procesa un solo archivo dentro de una transacción.
-   * @param tx Transacción Prisma
-   * @param file Archivo subido
-   * @param blob Blob asociado al archivo
-   * @param rootId ID del nodo raíz
-   * @param parentId ID del nodo padre
-   * @param pendingMoves Arreglo para registrar movimientos pendientes de archivos
-   * @returns Nodo procesado
-   */
-  static async processTx(
-    tx: PrismaTxClient,
-    file: UploadedFile,
-    blob: Blob,
-    rootId: Node["rootId"],
-    parentId: string,
-    pendingMoves: PendingMoves[],
-  ) {
-    try {
-      // Persistir el nodo en la base de datos
-      const node = await this.persistence.persistTx({
-        tx,
-        file,
-        blob,
-        rootId,
-        parentId,
-        pendingMoves,
-        initialNodeName: file.originalname,
-      });
-
-      return node;
-    } catch (err) {
-      console.log(err);
-      throw new AppError("INTERNAL", "Error al procesar el nodo");
-    }
+    return await this.upload.processUploadedFiles(
+      uploadedFiles,
+      rootId,
+      parentId,
+      manifest,
+      isAborted,
+    );
   }
 
   /**
@@ -830,40 +679,6 @@ export class NodeService {
     if (dirNodes.length > 0) {
       await this.bulkDeleteDirectories(dirNodes);
     }
-  }
-
-  static async incrementNodeSizeById(
-    nodeId: Node["id"],
-    newSize: bigint,
-  ): Promise<Node> {
-    // Propagar el cambio de tamaño a los ancestros
-    await this.repo.propagateSizeToAncestors(nodeId, newSize, "increment");
-
-    // Retornamos el nodo actualizado, ya que sabemos que existe previamente le decimos a ts que no sera null
-    return (await this.repo.findById(nodeId))!;
-  }
-
-  /**
-   * @description Actualiza el tamaño de un nodo.
-   * @param nodeId ID del nodo a actualizar
-   * @param newSize Nuevo tamaño del nodo
-   * @returns Nodo actualizado
-   */
-  static async incrementNodeSizeByIdTx(
-    tx: PrismaTxClient,
-    nodeId: Node["id"],
-    newSize: bigint,
-  ): Promise<Node> {
-    // Propagar el cambio de tamaño a los ancestros
-    await this.repo.propagateSizeToAncestorsTx(
-      tx,
-      nodeId,
-      newSize,
-      "increment",
-    );
-
-    // Retornamos el nodo actualizado, ya que sabemos que existe previamente le decimos a ts que no sera null
-    return (await this.repo.findById(nodeId))!;
   }
 
   /**

@@ -5,13 +5,7 @@ import type { Request } from "express";
  * @param req Request
  * @returns Objeto con función para verificar si la request fue abortada y función de limpieza
  */
-export function setupClientAbort(
-  req: Request<
-    unknown,
-    unknown,
-    { parentId?: string | null; manifest?: unknown }
-  >,
-) {
+export function setupClientAbort(req: Request) {
   let aborted = false;
 
   const onAbort = () => {
