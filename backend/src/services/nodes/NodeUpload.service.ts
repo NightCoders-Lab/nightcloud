@@ -208,9 +208,13 @@ export class NodeUploadService {
 
     // Si el nodo no es nuevo, lo agregamos a los movimientos para eliminar el archivo temporal despues
     if (!isNew) {
+      // Primero obtenemos la ruta absoluta final del archivo en el almacenamiento
+      const absoluteFinalPath = this.cloud.getFilePath(storageKey);
+
+      // Luego, registramos el movimiento para eliminar el temporal
       ctx.attemptMoves.push({
         tmpPath: file.path,
-        finalPath: storageKey,
+        finalPath: absoluteFinalPath,
       });
     }
 
