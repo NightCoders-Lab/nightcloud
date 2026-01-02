@@ -5,9 +5,11 @@ import { useExplorerInitialization } from "@/hooks/explorer/useExplorerInitializ
 import NodeExplorerHeader from "./NodeExplorerHeader";
 import NodeExplorerCurrentFolder from "./NodeExplorerCurrentFolder";
 import NodeExplorerItem from "./NodeExplorerItem";
+import { useRef } from "react";
 
 export default function NodeExplorer() {
   const { currentFolderId, contextRootId } = useExplorer();
+  const parentRef = useRef<HTMLDivElement>(null);
 
   // Sincronizar el contextRootId con la URL
   const { rootParentId } = useExplorerContext();
@@ -33,14 +35,19 @@ export default function NodeExplorer() {
       </div>
 
       {/* Contenedor del explorador */}
-      <div className="max-h-64 overflow-y-auto border border-night-border rounded-lg p-3">
-        {/* Current folder (siempre aparece) */}
-        <NodeExplorerCurrentFolder node={node.data} />
+      <div
+        ref={parentRef}
+        className="max-h-64 overflow-y-auto border border-night-border rounded-lg"
+      >
+        <div className="p-3">
+          {/* Current folder (siempre aparece) */}
+          <NodeExplorerCurrentFolder node={node.data} />
 
-        {/* Separador */}
-        <div className="my-3 border-t border-night-border/50" />
+          {/* Separador */}
+          <div className="my-3 border-t border-night-border/50" />
 
-        <NodeExplorerItem nodeChildren={children} />
+          <NodeExplorerItem nodeChildren={children} parentRef={parentRef} />
+        </div>
       </div>
     </div>
   );
