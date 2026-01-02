@@ -48,7 +48,10 @@ export function successUploadToast(toastId: Id) {
   toast.update(toastId, {
     render: "Files uploaded successfully",
     type: "success",
-    autoClose: 3000,
+    autoClose: 4000,
+    isLoading: false,
+    closeOnClick: true,
+    draggable: true,
     progress: undefined,
   });
 }
@@ -63,6 +66,8 @@ export function cancelUploadToast(toastId: Id) {
     type: "warning",
     isLoading: false,
     autoClose: 3000,
+    closeOnClick: true,
+    draggable: true,
     progress: undefined,
   });
 }
@@ -76,6 +81,10 @@ export function errorUploadToast(toastId: Id) {
     render: "Error uploading files",
     type: "error",
     autoClose: 5000,
+    isLoading: false,
+    closeOnClick: true,
+    draggable: true,
+    progress: undefined,
   });
 }
 
@@ -90,6 +99,8 @@ export function warningUploadToast(toastId: Id, message: string) {
     type: "warning",
     isLoading: false,
     autoClose: 5000,
+    closeOnClick: true,
+    draggable: true,
     progress: undefined,
   });
 }

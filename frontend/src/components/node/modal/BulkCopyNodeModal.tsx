@@ -34,7 +34,7 @@ export default function BulkCopyNodeModal() {
       queryClient.invalidateQueries({
         queryKey: ["nodes", parentId ?? "root"],
       });
-      queryClient.invalidateQueries({ queryKey: ["cloudStats"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
 
       // Mostrar toast de éxito
       buildSuccessToast("copy", data);

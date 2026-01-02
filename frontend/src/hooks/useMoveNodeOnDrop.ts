@@ -35,7 +35,7 @@ export function useMoveNodeOnDrop() {
       queryClient.invalidateQueries({
         queryKey: ["nodes", node.parentId ?? "root"],
       });
-      queryClient.invalidateQueries({ queryKey: ["cloudStats"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
 
       // Finalmente mostrar el toast de éxito
       toast.success(`${successOperations} moved successfully`, {

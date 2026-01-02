@@ -42,7 +42,7 @@ export function useUploadInvalidateQueries() {
     });
 
     // Invalidar las estadísticas de la nube
-    queryClient.invalidateQueries({ queryKey: ["cloudStats"] });
+    queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
 
     invalidatedRef.current = true;
   }, [queue.length, active.length, completed, queryClient]);

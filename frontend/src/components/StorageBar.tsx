@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 export default function StorageBar() {
   const { data, isLoading, error } = useQuery({
     queryFn: getCloudStats,
-    queryKey: ["cloudStats"],
+    queryKey: ["cloud", "stats"],
   });
 
   let percentage = 0;
