@@ -105,8 +105,24 @@ export class LocalCloudStorage implements CloudStorage {
     // Asegurar la existencia del directorio destino
     await fs.mkdir(destDir, { recursive: true });
 
-    // Finalmente mover el archivo
-    await fs.rename(tmpPath, finalPath);
+    try {
+      // Finalmente mover el archivo
+      await fs.rename(tmpPath, finalPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EXDEV") {
+        // Si el error es EXDEV, significa que estamos moviendo entre diferentes discos
+        // En este caso, copiamos y luego eliminamos el archivo original
+        await this.copy(tmpPath, finalPath);
+        await fs.unlink(tmpPath);
+      } else {
+        // Si es otro error (permisos, disco lleno), lanzarlo para que el sistema sepa que falló
+        console.log(
+          `Error crítico al mover archivo de ${tmpPath} a ${finalPath}:`,
+          err,
+        );
+        throw new AppError("INTERNAL", "Error al mover el archivo físico");
+      }
+    }
   }
 
   /**
@@ -121,8 +137,16 @@ export class LocalCloudStorage implements CloudStorage {
     // Asegurar la existencia del directorio destino
     await fs.mkdir(destDir, { recursive: true });
 
-    // Finalmente copiar el archivo
-    await fs.copyFile(srcPath, destPath);
+    try {
+      // Finalmente copiar el archivo
+      await fs.copyFile(srcPath, destPath);
+    } catch (err) {
+      console.log(
+        `Error crítico al copiar archivo de ${srcPath} a ${destPath}:`,
+        err,
+      );
+      throw new AppError("INTERNAL", "Error al copiar el archivo físico");
+    }
   }
 
   async deleteDir(dirPath: string): Promise<void> {
