@@ -8,6 +8,7 @@ import { bulkCopyNodes } from "@/api/BulkNodeAPI";
 import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { buildBulkModalTitle } from "@/utils/build/buildBulkModalTitle";
 import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
+import { useState } from "react";
 
 export default function BulkCopyNodeModal() {
   const location = useLocation();
@@ -22,6 +23,7 @@ export default function BulkCopyNodeModal() {
   const isOpen =
     action === "copy" && scope === "bulk" && selectedNodes.length > 0;
   const closeModal = () => navigate(location.pathname, { replace: true }); // Remover los query params
+  const [clicked, setClicked] = useState(false);
 
   const { mutate } = useMutation({
     mutationFn: () =>
@@ -47,7 +49,9 @@ export default function BulkCopyNodeModal() {
   });
 
   const handleCopyNode = () => {
+    if (clicked) return; // Prevenir múltiples clics
     mutate();
+    setClicked(true);
   };
 
   // Contar archivos y carpetas seleccionadas
@@ -62,9 +66,17 @@ export default function BulkCopyNodeModal() {
         <NodeExplorer />
         <button
           onClick={handleCopyNode}
-          className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-night-primary hover:bg-night-primary-hover rounded-xl"
+          disabled={clicked}
+          className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-night-primary hover:bg-night-primary-hover rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Copy {files + folders} Item(s)
+          {clicked ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+              <span>Copying {files + folders} item(s)...</span>
+            </div>
+          ) : (
+            <span>Copy {files + folders} Item(s)</span>
+          )}
         </button>
       </div>
     </Modal>

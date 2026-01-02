@@ -6,6 +6,7 @@ import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { buildBulkModalTitle } from "@/utils/build/buildBulkModalTitle";
 import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
 import Modal from "../../Modal";
+import { useState } from "react";
 
 export default function BulkDeleteNodeModal() {
   const location = useLocation();
@@ -16,8 +17,10 @@ export default function BulkDeleteNodeModal() {
   const scope = queryParams.get("scope");
   const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { selectedNodes } = useSelectedNodes();
-  const isOpen = action === "delete" && scope === "bulk" && selectedNodes.length > 0;
+  const isOpen =
+    action === "delete" && scope === "bulk" && selectedNodes.length > 0;
   const closeModal = () => navigate(location.pathname, { replace: true }); // Remover los query params
+  const [clicked, setClicked] = useState(false);
 
   const { mutate } = useMutation({
     mutationFn: () => bulkDeleteNodes(selectedNodes.map((n) => n.id)),
@@ -39,7 +42,9 @@ export default function BulkDeleteNodeModal() {
   });
 
   const handleDeleteNode = () => {
+    if (clicked) return;
     mutate();
+    setClicked(true);
   };
 
   // Contar archivos y carpetas seleccionadas
@@ -57,9 +62,17 @@ export default function BulkDeleteNodeModal() {
         </p>
         <button
           onClick={handleDeleteNode}
-          className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-night-primary hover:bg-night-primary-hover rounded-xl"
+          disabled={clicked}
+          className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-night-primary hover:bg-night-primary-hover rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Delete {files + folders} Item(s)
+          {clicked ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+              <span>Deleting {files + folders} item(s)...</span>
+            </div>
+          ) : (
+            <span>Delete {files + folders} Item(s)</span>
+          )}
         </button>
       </div>
     </Modal>

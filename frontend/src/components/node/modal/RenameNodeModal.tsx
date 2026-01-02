@@ -7,8 +7,7 @@ import Modal from "../../Modal";
 import { renameNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/useNode";
 import RenameNodeForm from "../form/RenameNodeForm";
-import { useEffect } from "react";
-import ErrorMessage from "../../ErrorMessage";
+import { useEffect, useState } from "react";
 import LoadingModal from "@/components/LoadingModal";
 import ErrorModal from "@/components/ErrorModal";
 
@@ -24,6 +23,7 @@ export default function RenameNodeModal() {
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
   const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { node } = useNode(nodeId || undefined, "node");
+  const [clicked, setClicked] = useState(false);
 
   const initialValues: NodeRenameFormData = {
     name: "",
@@ -93,11 +93,13 @@ export default function RenameNodeModal() {
   });
 
   const handleRenameNode = (formData: NodeRenameFormData) => {
+    if (clicked) return; // Prevenir múltiples clics
     const data = {
       ...formData,
       nodeId: nodeId!,
     };
     mutate(data);
+    setClicked(true);
   };
 
   if (node.loading) {
@@ -109,7 +111,9 @@ export default function RenameNodeModal() {
     queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
     return (
       <ErrorModal
-        message={"An error occurred while loading, are you sure this file/folder exists?"}
+        message={
+          "An error occurred while loading, are you sure this file/folder exists?"
+        }
         isOpen={isOpen}
         closeModal={closeModal}
       />
@@ -123,9 +127,7 @@ export default function RenameNodeModal() {
       open={isOpen}
       close={closeModal}
     >
-      {node.loading && <p className="mt-2">Loading...</p>}
-      {node.error && <ErrorMessage>Error loading node data</ErrorMessage>}
-      {node.data && !node.loading && (
+      {node.data && (
         <form
           className="space-y-8"
           onSubmit={handleSubmit(handleRenameNode)}
@@ -136,11 +138,20 @@ export default function RenameNodeModal() {
             errors={errors}
             node={node.data}
           />
-          <input
+          <button
             type="submit"
-            value={`Rename ${node.data.isDir ? "Folder" : "File"}`}
-            className="w-full p-3 font-bold text-white uppercase transition-colors cursor-pointer bg-night-primary hover:bg-night-primary-hover rounded-xl"
-          />
+            disabled={clicked}
+            className="w-full p-3 font-bold text-white uppercase transition-colors cursor-pointer bg-night-primary hover:bg-night-primary-hover rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {clicked ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+                <span>Renaming...</span>
+              </div>
+            ) : (
+              <span>Rename</span>
+            )}
+          </button>
         </form>
       )}
     </Modal>

@@ -9,7 +9,7 @@ import MoveNodeForm from "../form/MoveNodeForm";
 import type { NodeMoveFormData } from "@/types";
 import { useForm } from "react-hook-form";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
 import LoadingModal from "@/components/LoadingModal";
 import ErrorModal from "@/components/ErrorModal";
@@ -26,6 +26,7 @@ export default function MoveNodeModal() {
   const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { selectedFolderId } = useExplorer();
   const { node } = useNode(nodeId || undefined, "node");
+  const [clicked, setClicked] = useState(false);
 
   const initialValues: NodeMoveFormData = {
     name: "",
@@ -71,10 +72,12 @@ export default function MoveNodeModal() {
   });
 
   const handleMoveNode = (formData: NodeMoveFormData) => {
+    if (clicked) return; // Prevenir múltiples clics
     const data = {
       ...formData,
     };
     mutate(data);
+    setClicked(true);
   };
 
   if (node.loading) {
@@ -86,7 +89,9 @@ export default function MoveNodeModal() {
     queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
     return (
       <ErrorModal
-        message={"An error occurred while loading, are you sure this file/folder exists?"}
+        message={
+          "An error occurred while loading, are you sure this file/folder exists?"
+        }
         isOpen={isOpen}
         closeModal={closeModal}
       />
@@ -115,11 +120,20 @@ export default function MoveNodeModal() {
             errors={errors}
             isDir={node.data.isDir}
           />
-          <input
+          <button
             type="submit"
-            value={`Move ${node.data.isDir ? "Folder" : "File"}`}
-            className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-night-primary hover:bg-night-primary-hover rounded-xl"
-          />
+            disabled={clicked}
+            className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-night-primary hover:bg-night-primary-hover rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {clicked ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+                <span>Moving...</span>
+              </div>
+            ) : (
+              <span>Move</span>
+            )}
+          </button>
         </form>
       )}
     </Modal>

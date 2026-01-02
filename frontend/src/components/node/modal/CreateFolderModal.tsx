@@ -6,7 +6,7 @@ import type { NodeFolderFormData } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createNodeFolder } from "@/api/NodeAPI";
 import { toast } from "react-toastify";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function CreateFolderModal() {
   const location = useLocation();
@@ -16,6 +16,7 @@ export default function CreateFolderModal() {
   const isOpen = queryParams.get("action") === "create-folder";
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
   const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
+  const [clicked, setClicked] = useState(false);
 
   const initialValues: NodeFolderFormData = {
     name: "",
@@ -45,11 +46,13 @@ export default function CreateFolderModal() {
   });
 
   const handleCreateFolder = (formData: NodeFolderFormData) => {
+    if (clicked) return; // Prevenir múltiples clics
     const data = {
       ...formData,
       parentId,
     };
     mutate(data);
+    setClicked(true);
   };
 
   // Auto focus the name input when the modal opens
@@ -72,11 +75,20 @@ export default function CreateFolderModal() {
         noValidate
       >
         <CreateFolderForm register={register} errors={errors} />
-        <input
+        <button
           type="submit"
-          value="Create Folder"
-          className="w-full p-3 font-bold text-white uppercase transition-colors cursor-pointer bg-night-primary hover:bg-night-primary-hover rounded-xl"
-        />
+          disabled={clicked}
+          className="w-full p-3 font-bold text-white uppercase transition-colors cursor-pointer bg-night-primary hover:bg-night-primary-hover rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {clicked ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+              <span>Creating Folder...</span>
+            </div>
+          ) : (
+            <span>Create Folder</span>
+          )}
+        </button>
       </form>
     </Modal>
   );

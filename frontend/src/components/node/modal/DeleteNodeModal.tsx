@@ -6,6 +6,7 @@ import { deleteNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/useNode";
 import LoadingModal from "@/components/LoadingModal";
 import ErrorModal from "@/components/ErrorModal";
+import { useState } from "react";
 
 export default function DeleteNodeModal() {
   const location = useLocation();
@@ -19,6 +20,7 @@ export default function DeleteNodeModal() {
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
   const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { node } = useNode(nodeId || undefined, "node");
+  const [clicked, setClicked] = useState(false);
 
   const { mutate } = useMutation({
     mutationFn: () => deleteNode(nodeId!),
@@ -44,7 +46,9 @@ export default function DeleteNodeModal() {
   });
 
   const handleDeleteNode = () => {
+    if (clicked) return; // Prevenir múltiples clics
     mutate();
+    setClicked(true);
   };
 
   if (node.loading) {
@@ -56,7 +60,9 @@ export default function DeleteNodeModal() {
     queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
     return (
       <ErrorModal
-        message={"An error occurred while loading, are you sure this file/folder exists?"}
+        message={
+          "An error occurred while loading, are you sure this file/folder exists?"
+        }
         isOpen={isOpen}
         closeModal={closeModal}
       />
@@ -96,9 +102,17 @@ export default function DeleteNodeModal() {
           </p>
           <button
             onClick={handleDeleteNode}
-            className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-red-500 hover:bg-red-700 rounded-xl"
+            disabled={clicked}
+            className="w-full p-3 font-bold text-white uppercase cursor-pointer transition-colors duration-200 bg-red-500 hover:bg-red-700 rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {`Delete ${node.data.isDir ? "Folder" : "File"}`}
+            {clicked ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+                <span>Deleting...</span>
+              </div>
+            ) : (
+              <span>Delete</span>
+            )}
           </button>
         </div>
       )}
