@@ -4,6 +4,7 @@ import type { DragEndEvent } from "@dnd-kit/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import { getDropData } from "../utils/getDropData";
+import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
 
 /**
  * @description Hook para manejar el movimiento de nodos al soltarlos en otro nodo mediante drag and drop.
@@ -24,23 +25,17 @@ export function useMoveNodeOnDrop() {
     onSuccess: (data, variables) => {
       // Obtener el nodo movido
       const { node } = variables;
-
-      // mensaje de éxito
-      const nodesAffected = Array.isArray(data) ? data.length : 1;
-      const successOperations = node?.isDir
-        ? `${nodesAffected} Folder(s)`
-        : `${nodesAffected} File(s)`;
+      // Determinar el parentId para invalidar la query correcta
+      const parentId = node.parentId === node.rootId ? "root" : node.parentId;
 
       // Invalidar la caché para refrescar los datos
       queryClient.invalidateQueries({
-        queryKey: ["nodes", node.parentId ?? "root"],
+        queryKey: ["nodes", parentId ?? "root"],
       });
       queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
 
-      // Finalmente mostrar el toast de éxito
-      toast.success(`${successOperations} moved successfully`, {
-        autoClose: 1000,
-      });
+      // Mostrar un toast de éxito
+      buildSuccessToast("move", data);
     },
     onError: (error) => {
       // Mostrar el error en un toast
