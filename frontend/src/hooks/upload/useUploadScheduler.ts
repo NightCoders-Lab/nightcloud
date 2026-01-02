@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useUploadJob } from "./useUploadJob";
 import { uploadFiles } from "@/api/NodeAPI";
 import { buildUploadFormData } from "@/utils/build/buildUploadFormData";
+import type { UploadJob } from "@/types/upload.types";
 
 /**
  * @description Hook para gestionar la programación de subidas de archivos, iniciando nuevas subidas según la concurrencia máxima permitida y el estado de la cola.
@@ -32,8 +33,8 @@ export function useUploadScheduler() {
     // Si no hay trabajos para iniciar, no hacer nada
     if (jobsToStart.length === 0) return;
 
-    // Iniciar los trabajos
-    jobsToStart.forEach((job) => {
+    // Función para procesar cada trabajo
+    const processJob = (job: UploadJob) => {
       // Iniciar el trabajo y obtener el controlador de aborto
       const startedJob = startJob(job.id);
       if (!startedJob?.controller) return;
@@ -58,7 +59,15 @@ export function useUploadScheduler() {
           // Marcar el trabajo como fallido
           failJob(startedJob.id, err);
         });
-    });
+    };
+
+    const startTimeout = setTimeout(() => {
+      // Iniciar los trabajos
+      jobsToStart.forEach(processJob);
+    }, 150); // Retardo de 150ms antes de iniciar nuevas subidas
+
+    // Limpiar el timeout si el efecto se vuelve a ejecutar antes de que se complete
+    return () => clearTimeout(startTimeout);
   }, [
     queue,
     active.length,
