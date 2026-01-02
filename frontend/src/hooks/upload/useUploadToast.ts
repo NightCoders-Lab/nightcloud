@@ -25,51 +25,51 @@ export function useUploadToast() {
   const lastUpdateRef = useRef<number>(0);
   const lastProgressRef = useRef<number>(0);
 
+  // Calcular el progreso global de las subidas
   const progress = getGlobalProgress(queue, active, completed, failed);
 
-  // Gestionar la creación, actualización y finalización del toast
-  useEffect(() => {
-    // Comprobar si hay actividad de subida
-    const hasActivity = queue.length > 0 || active.length > 0;
+  // Comprobar si hay actividad de subida
+  const hasActivity = queue.length > 0 || active.length > 0;
 
+  // Función para procesar la creación del toast
+  const processCreation = () => {
     // Crear el toast si hay actividad y no existe uno
     if (hasActivity && !toastIdRef.current) {
       toastIdRef.current = createUploadToast();
       lastUpdateRef.current = Date.now();
     }
+  };
 
-    // Actualizar el toast si existe y hay actividad
-    if (toastIdRef.current && hasActivity) {
-      // Controlar la frecuencia de actualización
-      const now = Date.now();
-      // Calcular el tiempo desde la última actualización
-      const timeSinceLastUpdate = now - lastUpdateRef.current;
-      // Calcular el cambio significativo en el progreso
-      const progressChangedSignificantly = Math.abs(
-        progress - lastProgressRef.current
-      );
+  // Función para procesar la actualización del toast
+  const processUpdate = () => {
+    // Actualizar el toast solo si existe y hay actividad
+    if (!toastIdRef.current || !hasActivity) return;
 
-      if (
-        timeSinceLastUpdate >= UPDATE_INTERVAL_MS ||
-        progressChangedSignificantly ||
-        progress === 100 ||
-        progress === 0
-      ) {
-        updateUploadToast(toastIdRef.current, () => cancelAll(), progress);
-        lastUpdateRef.current = now;
-        lastProgressRef.current = progress;
-      }
+    // Controlar la frecuencia de actualización
+    const now = Date.now();
+    // Calcular el tiempo desde la última actualización
+    const timeSinceLastUpdate = now - lastUpdateRef.current;
+    // Calcular el cambio significativo en el progreso
+    const progressChangedSignificantly = Math.abs(
+      progress - lastProgressRef.current
+    );
+
+    if (
+      timeSinceLastUpdate >= UPDATE_INTERVAL_MS ||
+      progressChangedSignificantly ||
+      progress === 100 ||
+      progress === 0
+    ) {
+      updateUploadToast(toastIdRef.current, () => cancelAll(), progress);
+      lastUpdateRef.current = now;
+      lastProgressRef.current = progress;
     }
-  }, [queue.length, active.length, progress, cancelAll]);
+  };
 
-  // Efecto para finalizar el toast cuando todas las subidas han terminado
-  useEffect(() => {
-    // Si no hay un toast activo, no hacer nada
-    if (!toastIdRef.current) return;
-
-    // Comprobar si está idle
-    const isIdle = queue.length === 0 && active.length === 0;
-    if (!isIdle) return;
+  // Función para procesar la finalización del toast
+  const processCompletion = () => {
+    // Finalizar el toast solo si no hay actividad
+    if (hasActivity || !toastIdRef.current) return;
 
     const successCount = completed.length;
     const errorCount = failed.length;
@@ -82,33 +82,65 @@ export function useUploadToast() {
       return;
     }
 
-    // Mostrar el toast final según los resultados
-    if (errorCount === 0 && cancelledCount === 0) {
-      // Si fue exitoso (0 errores y 0 cancelados)
-      successUploadToast(toastIdRef.current);
-    } else if (successCount === 0 && errorCount === 0) {
-      // Si fue cancelado
-      cancelUploadToast(toastIdRef.current);
-    } else if (errorCount > 0 && successCount > 0) {
-      // Si hubo errores pero también subidas exitosas
-      warningUploadToast(
-        toastIdRef.current,
-        `${successCount} files uploaded, ${errorCount} failed.`
-      );
-    } else {
-      // Si hubo solo errores
-      errorUploadToast(toastIdRef.current);
-    }
+    // Finalizar el toast según los resultados
+    finalizeToast(successCount, errorCount, cancelledCount);
 
     // Resetear la referencia del toast
     toastIdRef.current = null;
     lastProgressRef.current = 0;
+  };
+
+  // Función para finalizar el toast según los resultados de la subida
+  const finalizeToast = (
+    successCount: number,
+    errorCount: number,
+    cancelledCount: number
+  ) => {
+    // Obtener el id del toast actual
+    const id = toastIdRef.current!;
+
+    // Si fue exitoso (0 errores y 0 cancelados)
+    if (errorCount === 0 && cancelledCount === 0) {
+      successUploadToast(id);
+      return;
+    }
+
+    // Si fue cancelado
+    if (successCount === 0 && errorCount === 0) {
+      cancelUploadToast(id);
+      return;
+    }
+
+    // Si hubo errores pero también subidas exitosas
+    if (errorCount > 0 && successCount > 0) {
+      warningUploadToast(
+        id,
+        `${successCount} files uploaded, ${errorCount} failed.`
+      );
+      return;
+    }
+
+    // Default: Si hubo solo errores
+    errorUploadToast(id);
+  };
+
+  // Efecto para gestionar el ciclo de vida del toast de subida
+  useEffect(() => {
+    processCreation();
+    processUpdate();
+    processCompletion();
+
+    // Desactivar la regla de exhaustividad de dependencias porque queremos que este efecto
+    // se ejecute solo cuando cambie el estado de las subidas, no por cambios en las funciones.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    hasActivity,
+    progress,
     queue.length,
     active.length,
+    completed.length,
     failed.length,
     cancelled.length,
-    completed.length,
-    failed,
+    cancelAll,
   ]);
 }
