@@ -6,7 +6,10 @@ type useCtxClickOutsideProps<T extends HTMLElement> = {
   enabled: boolean;
 };
 
-// Hook personalizado para manejar clicks fuera de un componente referenciado
+/**
+ * @description Hook para detectar clics fuera de un elemento referenciado y ejecutar una función de cierre.
+ * @param param0 Objeto con las propiedades: ref (referencia al elemento), onClose (función a ejecutar al hacer clic fuera) y enabled (booleano para habilitar/deshabilitar el hook)
+ */
 export function useCtxClickOutside<T extends HTMLElement>({
   ref,
   onClose,

@@ -3,7 +3,9 @@ import { useUploadJob } from "./useUploadJob";
 import { uploadFiles } from "@/api/NodeAPI";
 import { buildUploadFormData } from "@/utils/build/buildUploadFormData";
 
-
+/**
+ * @description Hook para gestionar la programación de subidas de archivos, iniciando nuevas subidas según la concurrencia máxima permitida y el estado de la cola.
+ */
 export function useUploadScheduler() {
   const {
     queue,

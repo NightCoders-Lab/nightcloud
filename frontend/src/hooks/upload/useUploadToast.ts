@@ -13,6 +13,9 @@ import { getGlobalProgress } from "@/utils/getGlobalProgress";
 
 const UPDATE_INTERVAL_MS = 100;
 
+/**
+ * @description Hook para gestionar la creación, actualización y finalización de un toast de subida de archivos basado en el estado de las subidas.
+ */
 export function useUploadToast() {
   const { queue, active, completed, failed, cancelled, cancelAll } =
     useUploadJob();

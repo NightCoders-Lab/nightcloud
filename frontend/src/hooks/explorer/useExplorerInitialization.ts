@@ -3,6 +3,11 @@ import { useExplorer } from "@/hooks/explorer/useExplorer";
 import type { NodeType } from "@/types";
 import { useAppStore } from "@/stores/useAppStore";
 
+/**
+ * @description Hook para inicializar el explorador de archivos basado en un ID raíz o datos de nodo proporcionados.
+ * @param rootParentId ID del nodo raíz para inicializar el explorador
+ * @param nodeData Datos del nodo para inicializar el explorador
+ */
 export function useExplorerInitialization(
   rootParentId?: string,
   nodeData?: NodeType

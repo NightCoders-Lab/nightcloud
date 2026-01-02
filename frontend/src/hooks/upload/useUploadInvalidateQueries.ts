@@ -3,6 +3,9 @@ import { useUploadJob } from "./useUploadJob";
 import { useEffect, useRef } from "react";
 import type { NodeType } from "@/types";
 
+/**
+ * @description Hook para invalidar las queries relacionadas con los nodos y estadísticas de la nube una vez que todas las subidas se han completado.
+ */
 export function useUploadInvalidateQueries() {
   const queryClient = useQueryClient();
   const { queue, active, completed } = useUploadJob();

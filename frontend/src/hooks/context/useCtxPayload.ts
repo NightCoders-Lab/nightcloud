@@ -4,6 +4,11 @@ import type {
   ContextMenuType,
 } from "@/types/contextMenu.types";
 
+/**
+ * @description Hook para obtener el payload del menú contextual si el tipo coincide con el esperado.
+ * @param expectedType Tipo esperado del menú contextual
+ * @returns El payload del menú contextual si el tipo coincide, o null en caso contrario
+ */
 export function useCtxPayload<T extends ContextMenuType>(
   expectedType: T
 ) {

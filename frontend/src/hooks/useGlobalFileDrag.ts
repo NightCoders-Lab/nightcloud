@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
+/**
+ * @description Hook para detectar si se están arrastrando archivos sobre la ventana global de la aplicación, ignorando si el modal de subida de archivos está abierto.
+ * @returns {boolean} Estado activo de arrastre de archivos
+ */
 export function useGlobalFileDrag() {
   const [active, setActive] = useState(false);
   const dragCounter = useRef(0);

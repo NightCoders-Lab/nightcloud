@@ -4,11 +4,9 @@ import { useEffect } from "react";
 import { useSearch } from "./useSearch";
 
 /**
- * @description Hook personalizado para buscar nodos por nombre
- * @param name Nombre a buscar
- * @param parentId ID del nodo padre (opcional)
- * @param limit Número máximo de resultados a retornar (por defecto 20)
- * @returns {object} Datos y estados de la búsqueda
+ * @description Hook para buscar nodos por nombre, con opciones de filtrado y control de estado.
+ * @param param0 Objeto con los parámetros de búsqueda: name, parentId, isEnabled, limit
+ * @returns Objeto con el estado de la búsqueda y los resultados obtenidos.
  */
 export function useSearchNode({
   name,

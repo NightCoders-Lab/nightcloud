@@ -4,6 +4,9 @@ import { useEffect, useRef } from "react";
 import type { NodeType } from "@/types";
 import { sortNodesByDir } from "@/utils/node/sortNodes";
 
+/**
+ * @description Hook para sincronizar los nodos subidos con la caché de React Query aplicando optimistic updates.
+ */
 export function useUploadQuerySync() {
   const queryClient = useQueryClient();
   const { completed } = useUploadJob();

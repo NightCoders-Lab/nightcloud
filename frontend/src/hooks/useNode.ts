@@ -19,10 +19,10 @@ const getChildrenQueryFn = (nodeId?: NodeType["id"]) =>
   nodeId ? () => getNodesFromDir(nodeId) : () => getNodesFromRoot();
 
 /**
- * @description Hook personalizado para obtener datos de un nodo, sus hijos y ancestros
- * @param nodeId ID del nodo
- * @param mode Modo de consulta (qué datos cargar)
- * @returns {object} Datos y estados de carga/error
+ * @description Hook para obtener datos de un nodo específico junto con sus relaciones (hijos, ancestros, descendientes) según el modo especificado.
+ * @param nodeId ID del nodo a consultar
+ * @param mode Modo de consulta que determina qué datos cargar (nodo, hijos, ancestros, descendientes)
+ * @returns Objeto con los datos y estados de carga/error del nodo y sus relaciones
  */
 export function useNode(nodeId: NodeType["id"] | undefined, mode: UseNodeMode) {
   // Configuración para determinar qué datos cargar

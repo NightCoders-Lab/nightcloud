@@ -1,6 +1,10 @@
 import { useAppStore } from "@/stores/useAppStore";
 import type { NodeType } from "@/types";
 
+/**
+ * @description Hook para manejar la lógica del explorador de archivos, incluyendo navegación, selección y breadcrumb.
+ * @returns {Object} Estado y funciones del explorador de archivos
+ */
 export function useExplorer() {
   const {
     currentFolderId,
