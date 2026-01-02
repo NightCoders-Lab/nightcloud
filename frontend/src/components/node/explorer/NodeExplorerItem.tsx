@@ -70,9 +70,9 @@ export default function NodeExplorerItem({
 
         return (
           <div
+            ref={rowVirtualizer.measureElement} // Medir el tamaño dinamicamente
             key={virtualRow.key}
             style={{
-              height: virtualRow.size,
               transform: `translateY(${virtualRow.start}px)`,
             }}
             className={classNames(
