@@ -10,8 +10,8 @@ import { LocalCloudStorage } from "../cloud/LocalCloudStorage";
 // Instancia de LocalCloudStorage
 const storage = new LocalCloudStorage();
 
-// Configuración del almacenamiento de Multer
-export const multerStorage = multer.diskStorage({
+// Configuración del almacenamiento local con multer
+export const localStorage = multer.diskStorage({
   destination: (
     _req: Request,
     _file: Express.Multer.File,
