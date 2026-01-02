@@ -37,8 +37,8 @@ export default function DirectoryView() {
       // Navegar al padre inmediato
       const parent = ancestors.data?.find((a) => a.id === nodeId);
 
-      // SI no hay padre, navegar al root
-      if (!parent?.parentId) return navigate("/");
+      // SI no hay padre o el padre es root, navegar a root
+      if (!parent?.parentId || parent.parentId === parent.rootId) return navigate("/");
 
       // Navegar al parentId del nodo actual
       navigate(`/directory/${parent.parentId}`);

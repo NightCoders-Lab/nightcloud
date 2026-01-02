@@ -19,7 +19,6 @@ export default function NodeExplorerItem({
   const { selectedFolderId, enterFolder, selectFolder } = useExplorer();
   const nodesToRender = nodeChildren.data?.filter((n) => n.isDir);
 
-
   // Configuracion del virtualizer para las filas calculadas previamente
   // La alerta desactivada es del eslint ya que el virtualizer no se puede memoizar
   // ya que siempre se necesita actualizar al cambiar el scroll
