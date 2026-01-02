@@ -1,7 +1,6 @@
 import { GLOBAL_ROOT_ID } from "@/config/constants";
 import { DB } from "@/config/db";
 
-import { ROOT_FOLDERS } from "./data/nodes";
 import { GLOBAL_ROOT } from "./data/root";
 
 // Obtener el cliente de Prisma
@@ -17,10 +16,10 @@ async function main() {
     });
 
     // Seed the root folders
-    await prisma.node.createMany({
-      data: ROOT_FOLDERS,
-      skipDuplicates: true,
-    });
+    // await prisma.node.createMany({
+    //   data: ROOT_FOLDERS,
+    //   skipDuplicates: true,
+    // });
 
     console.log("Seeding completed successfully.");
     process.exit(0);
