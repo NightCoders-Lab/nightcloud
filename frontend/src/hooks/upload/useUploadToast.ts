@@ -45,6 +45,9 @@ export function useUploadToast() {
     // Actualizar el toast solo si existe y hay actividad
     if (!toastIdRef.current || !hasActivity) return;
 
+    // No actualizar si es 100% (se finalizará luego)
+    if (progress === 100) return;
+
     // Controlar la frecuencia de actualización
     const now = Date.now();
     // Calcular el tiempo desde la última actualización
