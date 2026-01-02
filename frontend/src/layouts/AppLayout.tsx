@@ -17,7 +17,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { useMoveNodeOnDrop } from "@/utils/useMoveNodeOnDrop";
+import { useMoveNodeOnDrop } from "@/hooks/useMoveNodeOnDrop";
 import { useUploadScheduler } from "@/hooks/upload/useUploadScheduler";
 import { useUploadQuerySync } from "@/hooks/upload/useUploadQuerySync";
 import { useUploadInvalidateQueries } from "@/hooks/upload/useUploadInvalidateQueries";

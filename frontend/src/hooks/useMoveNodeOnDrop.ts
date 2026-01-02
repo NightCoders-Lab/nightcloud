@@ -3,8 +3,12 @@ import type { NodeType } from "@/types";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
-import { getDropData } from "./getDropData";
+import { getDropData } from "../utils/getDropData";
 
+/**
+ * @description Hook para manejar el movimiento de nodos al soltarlos en otro nodo mediante drag and drop.
+ * @returns {Object} Objeto con la función handleNodeDrop para manejar el evento de soltar un nodo.
+ */
 export function useMoveNodeOnDrop() {
   const queryClient = useQueryClient();
 

@@ -1,5 +1,6 @@
 import type { NodeSearchType, NodeType } from ".";
 
+// Types para cada tipo de menú contextual y su payload asociado
 export type ContextMenuRegistry = {
   node: { selectedNode: NodeType | NodeSearchType };
   nodes: { selectedNodes: NodeType[] | NodeSearchType[] };

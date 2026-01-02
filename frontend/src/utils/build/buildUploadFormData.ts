@@ -1,6 +1,12 @@
 import type { NodeType } from "@/types";
 import type { FileWithPath } from "react-dropzone";
 
+/**
+ * @description Construye un FormData para subir archivos, incluyendo un manifiesto con metadatos.
+ * @param files Array de archivos a subir
+ * @param parentId ID del nodo padre donde se subirán los archivos (o null para la raíz)
+ * @returns FormData listo para ser enviado en una solicitud de subida
+ */
 export function buildUploadFormData(
   files: FileWithPath[],
   parentId: NodeType["id"] | null

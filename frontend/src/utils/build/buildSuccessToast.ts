@@ -3,6 +3,12 @@ import { toast } from "react-toastify";
 
 type OperationAction = "copy" | "move" | "delete" | "download";
 
+/**
+ * @description Construye y muestra un toast de éxito después de una operación en nodos.
+ * @param action Tipo de acción realizada: "copy", "move", "delete" o "download"
+ * @param data Nodo o nodos afectados por la acción
+ * @returns void
+ */
 export function buildSuccessToast(
   action: OperationAction,
   data: NodeType | NodeType[] | NodeLiteType | NodeLiteType[] | NodeSearchType | NodeSearchType[]
