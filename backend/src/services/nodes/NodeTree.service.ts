@@ -58,78 +58,87 @@ export class NodeTreeService {
   ) {
     // Transacción para "copiar" el nodo en la base de datos
 
-    return await this.prisma.$transaction(async (tx) => {
-      // Resolver el nuevo nombre y hash para el nodo de directorio
-      const nodeName = await this.identity.resolveNameTx(
-        tx,
-        node,
-        parentId,
-        options?.newName
-          ? {
-              newName: options.newName,
-            }
-          : undefined,
-      );
-
-      // Almacenar el nodo copiado
-      const nodesToCopy = await this.repo.getAllNodeDescendantsTx(tx, node.id);
-
-      // Asegurarse de que no se está copiando dentro de sí mismo
-      if (nodesToCopy.some((n) => n.id === parentId)) {
-        throw new AppError(
-          "BAD_REQUEST",
-          `No se puede ${options?.mode === "move" ? "mover" : "copiar"} un directorio dentro de sí mismo`,
-        );
-      }
-
-      // Crear el nodo de la carpeta copiada
-      const copiedDir = await this.repo.createTx(tx, {
-        parent: parentId ? { connect: { id: parentId } } : undefined,
-        rootId: node.rootId,
-        name: nodeName,
-        size: node.size,
-        mime: node.mime,
-        isDir: node.isDir,
-      });
-
-      // Preparar las carpetas a crear
-      const directories = nodesToCopy.filter((n) => n.isDir && n.depth > 0); // Excluir la raiz
-
-      // Copiar la estructura de directorios primero
-      const { dirMap, nodesCreated } = await this.copyNodeDirTree(
-        tx,
-        directories,
-        {
-          oldId: node.id,
-          newId: copiedDir.id,
-        },
-      );
-
-      // Filtrar solo los archivos para copiarlos
-      const files = nodesToCopy.filter((n) => !n.isDir);
-
-      // Copiar los archivos dentro de la estructura creada
-      const copiedNodes = await this.copyNodeFileTree(
-        tx,
-        files,
-        dirMap,
-        options?.mode,
-      );
-
-      // Si tiene padre, propagar el tamaño de todos los ancestros que haya
-      if (copiedDir.parentId)
-        await this.repo.propagateSizeToAncestorsTx(
+    return await this.prisma.$transaction(
+      async (tx) => {
+        // Resolver el nuevo nombre y hash para el nodo de directorio
+        const nodeName = await this.identity.resolveNameTx(
           tx,
-          copiedDir.parentId,
-          copiedDir.size,
-          "increment",
+          node,
+          parentId,
+          options?.newName
+            ? {
+                newName: options.newName,
+              }
+            : undefined,
         );
 
-      // Callback opcional después de copiar los nodos
-      if (cb) await cb(tx, nodesToCopy);
+        // Almacenar el nodo copiado
+        const nodesToCopy = await this.repo.getAllNodeDescendantsTx(
+          tx,
+          node.id,
+        );
 
-      return [...nodesCreated, ...copiedNodes, copiedDir];
-    });
+        // Asegurarse de que no se está copiando dentro de sí mismo
+        if (nodesToCopy.some((n) => n.id === parentId)) {
+          throw new AppError(
+            "BAD_REQUEST",
+            `No se puede ${options?.mode === "move" ? "mover" : "copiar"} un directorio dentro de sí mismo`,
+          );
+        }
+
+        // Crear el nodo de la carpeta copiada
+        const copiedDir = await this.repo.createTx(tx, {
+          parent: parentId ? { connect: { id: parentId } } : undefined,
+          rootId: node.rootId,
+          name: nodeName,
+          size: node.size,
+          mime: node.mime,
+          isDir: node.isDir,
+        });
+
+        // Preparar las carpetas a crear
+        const directories = nodesToCopy.filter((n) => n.isDir && n.depth > 0); // Excluir la raiz
+
+        // Copiar la estructura de directorios primero
+        const { dirMap, nodesCreated } = await this.copyNodeDirTree(
+          tx,
+          directories,
+          {
+            oldId: node.id,
+            newId: copiedDir.id,
+          },
+        );
+
+        // Filtrar solo los archivos para copiarlos
+        const files = nodesToCopy.filter((n) => !n.isDir);
+
+        // Copiar los archivos dentro de la estructura creada
+        const copiedNodes = await this.copyNodeFileTree(
+          tx,
+          files,
+          dirMap,
+          options?.mode,
+        );
+
+        // Si tiene padre, propagar el tamaño de todos los ancestros que haya
+        if (copiedDir.parentId)
+          await this.repo.propagateSizeToAncestorsTx(
+            tx,
+            copiedDir.parentId,
+            copiedDir.size,
+            "increment",
+          );
+
+        // Callback opcional después de copiar los nodos
+        if (cb) await cb(tx, nodesToCopy);
+
+        return [...nodesCreated, ...copiedNodes, copiedDir];
+      },
+      {
+        maxWait: 5000,
+        timeout: 90000, // 90 segundos de timeout por si hay muchos nodos
+      },
+    );
   }
 
   /**
