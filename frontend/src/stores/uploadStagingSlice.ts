@@ -10,6 +10,10 @@ export type UploadStagingType = {
   clearStagedFiles: () => void;
 };
 
+// 10,000 es seguro dentro de los limites del navegador,
+// Aparte se subiran bajo concurrencia de acuerdo al limite configurado.
+const MAX_UPLOAD_LIMIT = 10000;
+
 export const createUploadStaging: StateCreator<UploadStagingType> = (
   set,
   get
@@ -17,22 +21,20 @@ export const createUploadStaging: StateCreator<UploadStagingType> = (
   stagedFiles: [],
   stageFiles: (files: FileWithPath[]) => {
     const stagedFiles = get().stagedFiles;
-    const uploadLimit =
-      Number(import.meta.env.VITE_API_UPLOAD_FILES_LIMIT) || 10;
 
     // Variable para posibles errores
     let error = null;
 
     // Limitar archivos en staging
-    if (stagedFiles.length >= uploadLimit) {
-      error = `Upload staging limit of ${uploadLimit} files reached.`;
+    if (stagedFiles.length >= MAX_UPLOAD_LIMIT) {
+      error = `Upload staging limit of ${MAX_UPLOAD_LIMIT} files reached.`;
       return { error };
     }
 
     // Si al agregar los nuevos archivos se excede el límite, recortar la lista
-    if (stagedFiles.length + files.length > uploadLimit) {
-      files = files.slice(0, uploadLimit - stagedFiles.length); // Solo agregar hasta el límite
-      error = `Only ${uploadLimit - stagedFiles.length} files were added.`;
+    if (stagedFiles.length + files.length > MAX_UPLOAD_LIMIT) {
+      files = files.slice(0, MAX_UPLOAD_LIMIT - stagedFiles.length); // Solo agregar hasta el límite
+      error = `Only ${MAX_UPLOAD_LIMIT - stagedFiles.length} files were added.`;
     }
 
     set((prev) => ({

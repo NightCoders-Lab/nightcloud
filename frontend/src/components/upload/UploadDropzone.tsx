@@ -37,7 +37,6 @@ export default function UploadDropzone() {
       }
     },
     multiple: true, // Permitir múltiples archivos
-    maxFiles: uploadLimit, // Límite de archivos
     noClick: true, // Deshabilitar clic para abrir el diálogo
     noKeyboard: true, // Deshabilitar soporte de teclado
     disabled: !enabled,

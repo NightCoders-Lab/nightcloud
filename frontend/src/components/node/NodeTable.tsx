@@ -36,13 +36,15 @@ export default function NodeTable({ nodes }: Readonly<NodeTableProps>) {
   const nodesToRender = isSearching ? searchResults : sortedNodes;
   const hasNodes = nodesToRender.length > 0;
 
-  // Ignorar la alerta del eslint ya que el virtualizer no se puede memoizar ya que siempre se necesita actualizar al cambiar el scroll
   // Configuracion del virtualizer para las filas
+  // La alerta desactivada es del eslint ya que el virtualizer no se puede memoizar 
+  // ya que siempre se necesita actualizar al cambiar el scroll
+  // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: nodesToRender.length,
     getScrollElement: () => parentRef.current, // Elemento scrollable
     estimateSize: () => 64, // Altura estimada de cada fila
-    overscan: 8, // Filas adicionales a renderizar fuera de vista
+    overscan: 8, // Filas adicionales a renderizar fuera de vista - RECOMENDADO: 8-10 para evitar parpadeos al scrollear rápido
   });
 
   // Alternar la direccion de ordenamiento
