@@ -11,6 +11,7 @@ import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { useDraggable } from "@dnd-kit/core";
 import classNames from "@/utils/classNames";
 import { useDrag } from "@/hooks/stores/useDrag";
+import { isNodeDrag } from "@/hooks/dnd/utils/dndGuards";
 
 type NodeFileProps = {
   node: NodeType | NodeSearchType;
@@ -19,7 +20,8 @@ type NodeFileProps = {
 export default function NodeFile({ node }: Readonly<NodeFileProps>) {
   const { selectedNodes, addSelectedNodes, removeSelectedNode } =
     useSelectedNodes();
-  const { isDropping } = useDrag();
+  const { isDropping: dropping, active } = useDrag();
+  const isDropping = isNodeDrag(active) && active.id === node.id && dropping;
 
   // Drag and Drop
   const { attributes, listeners, setNodeRef, transform, isDragging } =

@@ -11,6 +11,7 @@ import { useCtx } from "@/hooks/context/useCtx";
 import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useDrag } from "@/hooks/stores/useDrag";
+import { isNodeDrag } from "@/hooks/dnd/utils/dndGuards";
 
 type NodeDirProps = {
   node: NodeType | NodeSearchType;
@@ -23,7 +24,8 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
     addSelectedNodes,
     removeSelectedNode,
   } = useSelectedNodes();
-  const { isDropping } = useDrag();
+  const { isDropping: dropping, active } = useDrag();
+  const isDropping = isNodeDrag(active) && active.id === node.id && dropping;
 
   // Drag and Drop
   const {
