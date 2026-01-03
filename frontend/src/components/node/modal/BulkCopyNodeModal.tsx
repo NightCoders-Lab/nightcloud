@@ -1,56 +1,42 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
 import Modal from "../../Modal";
 import NodeExplorer from "../explorer/NodeExplorer";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
-import { bulkCopyNodes } from "@/api/BulkNodeAPI";
 import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { buildBulkModalTitle } from "@/utils/build/buildBulkModalTitle";
-import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
 import { useState } from "react";
+import { useBulkCopyNodes } from "@/hooks/nodes/bulk/useBulkCopyNodes";
 
 export default function BulkCopyNodeModal() {
   const location = useLocation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const queryParams = new URLSearchParams(location.search);
   const action = queryParams.get("action");
   const scope = queryParams.get("scope");
-  const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { selectedNodes } = useSelectedNodes();
   const { selectedFolderId } = useExplorer();
   const isOpen =
     action === "copy" && scope === "bulk" && selectedNodes.length > 0;
   const closeModal = () => navigate(location.pathname, { replace: true }); // Remover los query params
   const [clicked, setClicked] = useState(false);
+  const { bulkCopyNodes } = useBulkCopyNodes();
 
-  const { mutate } = useMutation({
-    mutationFn: () =>
-      bulkCopyNodes(
-        selectedNodes.map((n) => n.id),
-        selectedFolderId ?? null
-      ),
-    onSuccess: (data) => {
-      // Invalidar la caché para refrescar los datos
-      queryClient.invalidateQueries({
-        queryKey: ["nodes", parentId ?? "root"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
-
-      // Mostrar toast de éxito
-      buildSuccessToast("copy", data);
-
-      closeModal();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  const handleSuccess = () => {
+    closeModal();
+    setClicked(false);
+  };
 
   const handleCopyNode = () => {
     if (clicked) return; // Prevenir múltiples clics
-    mutate();
+    bulkCopyNodes(
+      {
+        nodeIds: selectedNodes.map((n) => n.id),
+        destinationFolderId: selectedFolderId ?? null,
+      },
+      {
+        onSuccess: handleSuccess,
+      }
+    );
     setClicked(true);
   };
 

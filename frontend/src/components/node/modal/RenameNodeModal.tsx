@@ -1,15 +1,15 @@
-import type { NodeRenameFormData, NodeType } from "@/types";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { NodeRenameFormData } from "@/types";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Modal from "../../Modal";
-import { renameNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/nodes/useNode";
 import RenameNodeForm from "../form/RenameNodeForm";
 import { useEffect, useState } from "react";
 import LoadingModal from "@/components/LoadingModal";
 import ErrorModal from "@/components/ErrorModal";
+import { useRenameNode } from "@/hooks/nodes/useRenameNode";
 
 export default function RenameNodeModal() {
   const location = useLocation();
@@ -21,9 +21,9 @@ export default function RenameNodeModal() {
   const nodeId = queryParams.get("targetId");
   const isOpen = action === "rename" && scope === "single" && !!nodeId;
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
-  const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { node } = useNode(nodeId || undefined, "node");
   const [clicked, setClicked] = useState(false);
+  const { renameNode } = useRenameNode();
 
   const initialValues: NodeRenameFormData = {
     name: "",
@@ -49,56 +49,20 @@ export default function RenameNodeModal() {
     }
   }, [isOpen, setFocus]);
 
-  const { mutate } = useMutation({
-    mutationFn: (data: NodeRenameFormData & { nodeId: NodeType["id"] }) =>
-      renameNode(data),
-    onSuccess: (data) => {
-      // Actualizar la caché de React Query
-
-      // Actualizar el nombre en la lista de nodos hijos
-      queryClient.setQueryData(
-        ["nodes", parentId ?? "root"],
-        (oldData: NodeType[] | undefined) => {
-          if (!oldData) return oldData;
-          return oldData.map((node) =>
-            node.id === data.id ? { ...node, name: data.name } : node
-          );
-        }
-      );
-
-      // Actualizar el nombre del nodo detallado
-      queryClient.setQueryData(
-        ["node", "details", nodeId],
-        (oldData: NodeType | undefined) => {
-          if (!oldData) return oldData;
-          return { ...oldData, name: data.name };
-        }
-      );
-
-      // Invalidar la caché de la lista de nodos para recargar en segundo plano (Optimistic Update)
-      queryClient.invalidateQueries({
-        queryKey: ["nodes", parentId ?? "root"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
-
-      closeModal();
-      toast.success(`${data.isDir ? "Folder" : "File"} renamed successfully`, {
-        autoClose: 1000,
-      });
-      reset();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  const handleSuccess = () => {
+    closeModal();
+    reset();
+    setClicked(false);
+  };
 
   const handleRenameNode = (formData: NodeRenameFormData) => {
     if (clicked) return; // Prevenir múltiples clics
-    const data = {
-      ...formData,
-      nodeId: nodeId!,
-    };
-    mutate(data);
+    renameNode(
+      { node: node.data!, newName: formData.name },
+      {
+        onSuccess: handleSuccess,
+      }
+    );
     setClicked(true);
   };
 

@@ -3,20 +3,18 @@ import { useForm } from "react-hook-form";
 import Modal from "../../Modal";
 import CreateFolderForm from "../form/CreateFolderForm";
 import type { NodeFolderFormData } from "@/types";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createNodeFolder } from "@/api/NodeAPI";
-import { toast } from "react-toastify";
 import { useEffect, useState } from "react";
+import { useCreateNodeFolder } from "@/hooks/nodes/useCreateNodeFolder";
 
 export default function CreateFolderModal() {
   const location = useLocation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const queryParams = new URLSearchParams(location.search);
   const isOpen = queryParams.get("action") === "create-folder";
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
   const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const [clicked, setClicked] = useState(false);
+  const { createNodeFolder } = useCreateNodeFolder();
 
   const initialValues: NodeFolderFormData = {
     name: "",
@@ -30,20 +28,11 @@ export default function CreateFolderModal() {
     setFocus,
   } = useForm({ defaultValues: initialValues });
 
-  const { mutate } = useMutation({
-    mutationFn: (data: NodeFolderFormData) => createNodeFolder(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["nodes", parentId ?? "root"],
-      });
-      closeModal();
-      toast.success("Folder created successfully", { autoClose: 1000 });
-      reset();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  const handleSuccess = () => {
+    closeModal();
+    reset();
+    setClicked(false);
+  };
 
   const handleCreateFolder = (formData: NodeFolderFormData) => {
     if (clicked) return; // Prevenir múltiples clics
@@ -51,7 +40,9 @@ export default function CreateFolderModal() {
       ...formData,
       parentId,
     };
-    mutate(data);
+    createNodeFolder(data, {
+      onSuccess: handleSuccess,
+    });
     setClicked(true);
   };
 

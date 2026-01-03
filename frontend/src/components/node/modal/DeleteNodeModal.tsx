@@ -1,12 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Modal from "../../Modal";
-import { deleteNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/nodes/useNode";
 import LoadingModal from "@/components/LoadingModal";
 import ErrorModal from "@/components/ErrorModal";
 import { useState } from "react";
+import { useDeleteNode } from "@/hooks/nodes/useDeleteNode";
 
 export default function DeleteNodeModal() {
   const location = useLocation();
@@ -18,36 +18,20 @@ export default function DeleteNodeModal() {
   const nodeId = queryParams.get("targetId");
   const isOpen = action === "delete" && scope === "single" && !!nodeId;
   const closeModal = () => navigate(location.pathname, { replace: true }); // Limpia los query params
-  const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { node } = useNode(nodeId || undefined, "node");
   const [clicked, setClicked] = useState(false);
+  const { deleteNode } = useDeleteNode();
 
-  const { mutate } = useMutation({
-    mutationFn: () => deleteNode(nodeId!),
-    onSuccess: () => {
-      // Invalidar la caché para refrescar los datos
-      queryClient.invalidateQueries({
-        queryKey: ["nodes", parentId ?? "root"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["node", "details", nodeId] });
-      queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
-
-      closeModal();
-      toast.success(
-        `${node.data?.isDir ? "Folder" : "File"} deleted successfully`,
-        {
-          autoClose: 1000,
-        }
-      );
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  const handleSuccess = () => {
+    closeModal();
+    setClicked(false);
+  };
 
   const handleDeleteNode = () => {
     if (clicked) return; // Prevenir múltiples clics
-    mutate();
+    deleteNode(node.data!, {
+      onSuccess: handleSuccess,
+    });
     setClicked(true);
   };
 

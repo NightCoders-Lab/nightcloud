@@ -1,28 +1,24 @@
-import { moveNode } from "@/api/NodeAPI";
+import { copyNode } from "@/api/NodeAPI";
 import type { NodeType } from "@/types";
 import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 
-type MoveNodeParams = {
+type CopyNodeParams = {
   node: NodeType;
   targetId: string | null;
   newName?: string;
 };
 
-/**
- * @description Hook para mover nodos dentro del explorador de archivos.
- * @returns
- */
-export function useMoveNode() {
+export function useCopyNode() {
   const queryClient = useQueryClient();
 
-  // Configurar la mutacion para mover nodos
   const { mutate, mutateAsync, isPending } = useMutation({
-    mutationFn: ({ node, targetId, newName }: MoveNodeParams) =>
-      moveNode(node.id, targetId, newName ?? node.name),
+    mutationFn: ({ node, targetId, newName }: CopyNodeParams) =>
+      copyNode(node.id, targetId, newName ?? node.name),
+
     onSuccess: (data, variables) => {
-      // Obtener el nodo movido
+      // Obtener el nodo copiado
       const { node } = variables;
       // Determinar el parentId para invalidar la query correcta
       const parentId = node.parentId === node.rootId ? "root" : node.parentId;
@@ -31,10 +27,12 @@ export function useMoveNode() {
       queryClient.invalidateQueries({
         queryKey: ["nodes", parentId ?? "root"],
       });
+
+      // Actualizar las estadísticas en caché
       queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
 
       // Mostrar un toast de éxito
-      buildSuccessToast("move", data);
+      buildSuccessToast("copy", data);
     },
     onError: (error) => {
       // Mostrar el error en un toast
@@ -43,8 +41,8 @@ export function useMoveNode() {
   });
 
   return {
-    moveNode: mutate,
-    moveNodeAsync: mutateAsync,
+    copyNode: mutate,
+    copyNodeAsync: mutateAsync,
     isPending,
   };
 }

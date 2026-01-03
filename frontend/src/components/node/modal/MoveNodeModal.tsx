@@ -1,18 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Modal from "../../Modal";
 import NodeExplorer from "../explorer/NodeExplorer";
-import { moveNode } from "@/api/NodeAPI";
 import { useNode } from "@/hooks/nodes/useNode";
 import MoveNodeForm from "../form/MoveNodeForm";
 import type { NodeMoveFormData } from "@/types";
 import { useForm } from "react-hook-form";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
 import { useEffect, useState } from "react";
-import { buildSuccessToast } from "@/utils/build/buildSuccessToast";
 import LoadingModal from "@/components/LoadingModal";
 import ErrorModal from "@/components/ErrorModal";
+import { useMoveNode } from "@/hooks/nodes/useMoveNode";
 
 export default function MoveNodeModal() {
   const location = useLocation();
@@ -23,10 +22,10 @@ export default function MoveNodeModal() {
   const scope = queryParams.get("scope");
   const nodeId = queryParams.get("targetId");
   const isOpen = action === "move" && scope === "single" && !!nodeId;
-  const parentId = location.pathname.split("/").pop() || null; // Obtener el parentId de la URL
   const { selectedFolderId } = useExplorer();
   const { node } = useNode(nodeId || undefined, "node");
   const [clicked, setClicked] = useState(false);
+  const { moveNode } = useMoveNode();
 
   const initialValues: NodeMoveFormData = {
     name: "",
@@ -50,33 +49,26 @@ export default function MoveNodeModal() {
 
   const closeModal = () => navigate(location.pathname, { replace: true }); // Remover los query params
 
-  const { mutate } = useMutation({
-    mutationFn: (data: NodeMoveFormData) =>
-      moveNode(nodeId!, selectedFolderId ?? null, data.name ?? node.data!.name),
-    onSuccess: (data) => {
-      // Invalidar la caché para refrescar los datos
-      queryClient.invalidateQueries({
-        queryKey: ["nodes", parentId ?? "root"],
-      });
-      queryClient.invalidateQueries({ queryKey: ["cloud", "stats"] });
+  // Manejar el éxito del movimiento
+  const handleSuccess = () => {
+    closeModal();
+    reset();
+    setClicked(false);
+  };
 
-      // Mostrar toast de éxito
-      buildSuccessToast("move", data);
-      closeModal();
-
-      reset();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-
+  // Manejar el envío del formulario
   const handleMoveNode = (formData: NodeMoveFormData) => {
     if (clicked) return; // Prevenir múltiples clics
-    const data = {
-      ...formData,
-    };
-    mutate(data);
+    moveNode(
+      {
+        node: node.data!,
+        targetId: selectedFolderId ?? null,
+        newName: formData.name,
+      },
+      {
+        onSuccess: handleSuccess,
+      }
+    );
     setClicked(true);
   };
 
