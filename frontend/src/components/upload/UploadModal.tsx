@@ -35,9 +35,18 @@ export default function ModalDropzone() {
         <div className="flex flex-col gap-4">
           <NodeExplorer />
         </div>
-        <span className="tracking-wider font-semibold">
-          Staged Files for Upload ({stagedFiles.length} / 10000 files):
-        </span>
+        <div className="flex gap-4 justify-between">
+          <span className="tracking-wider font-semibold">
+            Staged Files for Upload ({stagedFiles.length} / 10000 files):
+          </span>
+          <button
+            onClick={clearStagedFiles}
+            disabled={stagedFiles.length === 0}
+            className="px-3 py-1 rounded-md uppercase bg-red-900/30 text-red-400 transition-colors duration-200 hover:cursor-pointer hover:bg-red-900/50 hover:text-red-300 disabled:opacity-65 disabled:cursor-not-allowed"
+          >
+            Clear Staging
+          </button>
+        </div>
         <UploadStagingList />
 
         <button

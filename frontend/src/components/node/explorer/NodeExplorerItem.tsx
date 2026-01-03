@@ -26,7 +26,7 @@ export default function NodeExplorerItem({
   const rowVirtualizer = useVirtualizer({
     count: nodesToRender ? nodesToRender.length : 0,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 60, // Altura estimada de cada fila
+    estimateSize: () => 70, // Altura estimada de cada fila
     overscan: 4, // Filas adicionales para renderizar fuera de la vista
   });
 
@@ -70,31 +70,37 @@ export default function NodeExplorerItem({
 
         return (
           <div
-            ref={rowVirtualizer.measureElement} // Medir el tamaño dinamicamente
             key={virtualRow.key}
             style={{
               transform: `translateY(${virtualRow.start}px)`,
             }}
-            className={classNames(
-              isSelected
-                ? "bg-night-primary/20 border-night-primary/20"
-                : "hover:bg-night-surface hover:border-night-border/50",
-              "absolute top-0 left-0 w-full flex justify-between gap-3 text-left px-4 py-3 rounded-lg transition-all duration-200 border border-transparent cursor-default"
-            )}
+            className="absolute top-0 left-0 w-full pb-2"
           >
-            <NodeExplorerAnimatedFolder node={node} enterFolder={enterFolder} />
-
-            <button
-              type="button"
-              onClick={() => selectFolder(node.id)}
-              className="flex items-center justify-center w-10 h-10 text-night-text opacity-80 hover:cursor-pointer"
-            >
-              {isSelected ? (
-                <HiCheckCircle size={25} />
-              ) : (
-                <HiOutlineCheckCircle size={25} />
+            <div
+              className={classNames(
+                isSelected
+                  ? "bg-night-primary/20 border-night-primary/20"
+                  : "hover:bg-night-surface hover:border-night-border/50",
+                "flex justify-between text-left px-4 py-3 rounded-lg transition-all duration-200 border border-transparent cursor-default"
               )}
-            </button>
+            >
+              <NodeExplorerAnimatedFolder
+                node={node}
+                enterFolder={enterFolder}
+              />
+
+              <button
+                type="button"
+                onClick={() => selectFolder(node.id)}
+                className="flex items-center justify-center w-10 h-10 text-night-text opacity-80 hover:cursor-pointer"
+              >
+                {isSelected ? (
+                  <HiCheckCircle size={25} />
+                ) : (
+                  <HiOutlineCheckCircle size={25} />
+                )}
+              </button>
+            </div>
           </div>
         );
       })}

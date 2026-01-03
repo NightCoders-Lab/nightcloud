@@ -1,15 +1,15 @@
-import { useAppStore } from "@/stores/useAppStore";
 import { useDropzone } from "react-dropzone";
 import { HiOutlineCloudUpload } from "react-icons/hi";
 import { useMatch } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
+import { useUploadStage } from "@/hooks/upload/useUploadStage";
 
 export default function UploadDropzone() {
   const matchRoot = useMatch("/");
   const matchDirectory = useMatch("/directory/:nodeId");
   const enabled = !!matchRoot || !!matchDirectory;
-  const stageFiles = useAppStore((state) => state.stageFiles);
+  const { stageFiles } = useUploadStage();
   const uploadLimit = Number(import.meta.env.VITE_API_UPLOAD_FILES_LIMIT) || 10;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
