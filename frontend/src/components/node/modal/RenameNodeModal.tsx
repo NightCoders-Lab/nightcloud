@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Modal from "../../Modal";
 import { renameNode } from "@/api/NodeAPI";
-import { useNode } from "@/hooks/useNode";
+import { useNode } from "@/hooks/nodes/useNode";
 import RenameNodeForm from "../form/RenameNodeForm";
 import { useEffect, useState } from "react";
 import LoadingModal from "@/components/LoadingModal";

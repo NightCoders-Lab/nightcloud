@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import Modal from "../../Modal";
 import NodeExplorer from "../explorer/NodeExplorer";
 import { moveNode } from "@/api/NodeAPI";
-import { useNode } from "@/hooks/useNode";
+import { useNode } from "@/hooks/nodes/useNode";
 import MoveNodeForm from "../form/MoveNodeForm";
 import type { NodeMoveFormData } from "@/types";
 import { useForm } from "react-hook-form";

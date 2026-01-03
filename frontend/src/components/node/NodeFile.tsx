@@ -10,6 +10,7 @@ import { useCtx } from "@/hooks/context/useCtx";
 import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { useDraggable } from "@dnd-kit/core";
 import classNames from "@/utils/classNames";
+import { useDrag } from "@/hooks/stores/useDrag";
 
 type NodeFileProps = {
   node: NodeType | NodeSearchType;
@@ -18,12 +19,14 @@ type NodeFileProps = {
 export default function NodeFile({ node }: Readonly<NodeFileProps>) {
   const { selectedNodes, addSelectedNodes, removeSelectedNode } =
     useSelectedNodes();
+  const { isDropping } = useDrag();
 
   // Drag and Drop
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: node.id,
       data: node,
+      disabled: isDropping,
     });
   // Estilo de transformacion durante el drag
   const style =
@@ -75,6 +78,7 @@ export default function NodeFile({ node }: Readonly<NodeFileProps>) {
         isDragging
           ? "opacity-40 cursor-grabbing border-dashed"
           : "opacity-100 scale-100",
+        isDropping ? "opacity-50 cursor-not-allowed" : "",
         "grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 mb-1 items-center px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent select-none w-full"
       )}
     >
@@ -91,7 +95,11 @@ export default function NodeFile({ node }: Readonly<NodeFileProps>) {
 
       {/* Nombre e Icono */}
       <div className="flex items-center gap-3 overflow-hidden">
-        <Icon className="text-xl text-night-muted shrink-0" />
+        {isDropping ? (
+          <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+        ) : (
+          <Icon className="text-xl text-night-muted shrink-0" />
+        )}
         <span
           className={`truncate font-medium ${
             isSelected ? "text-white" : "text-night-text"

@@ -10,6 +10,7 @@ import NodeActions from "./actions/NodeActions";
 import { useCtx } from "@/hooks/context/useCtx";
 import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDrag } from "@/hooks/stores/useDrag";
 
 type NodeDirProps = {
   node: NodeType | NodeSearchType;
@@ -22,6 +23,7 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
     addSelectedNodes,
     removeSelectedNode,
   } = useSelectedNodes();
+  const { isDropping } = useDrag();
 
   // Drag and Drop
   const {
@@ -33,6 +35,7 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
   } = useDraggable({
     id: node.id,
     data: node,
+    disabled: isDropping,
   });
 
   const { isOver, setNodeRef: setDroppableRef } = useDroppable({
@@ -99,6 +102,7 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
           ? "opacity-40 cursor-grabbing border-dashed"
           : "opacity-100 scale-100",
         isOver ? "border-night-primary/40 bg-night-primary/20" : "",
+        isDropping ? "opacity-50 cursor-not-allowed" : "",
         "relative z-10 grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 items-center mb-1 px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent cursor-default w-full hover:cursor-pointer"
       )}
     >
@@ -120,7 +124,11 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
 
       {/* Nombre e Icono */}
       <div className="flex items-center gap-3 overflow-hidden">
-        <FaFolder className="text-xl text-night-primary shrink-0" />
+        {isDropping ? (
+          <div className="w-5 h-5 border-2 border-t-transparent border-night-text rounded-full animate-spin" />
+        ) : (
+          <FaFolder className="text-xl text-night-primary shrink-0" />
+        )}
         <span
           className={`truncate font-medium ${
             isSelected ? "text-white" : "text-night-text"

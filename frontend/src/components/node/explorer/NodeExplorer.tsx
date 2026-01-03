@@ -1,4 +1,4 @@
-import { useNode } from "@/hooks/useNode";
+import { useNode } from "@/hooks/nodes/useNode";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
 import { useExplorerContext } from "@/hooks/explorer/useExplorerContext";
 import { useExplorerInitialization } from "@/hooks/explorer/useExplorerInitialization";

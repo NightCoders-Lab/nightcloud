@@ -9,30 +9,31 @@ import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
 import ModalContextMenu from "@/components/context/ModalContextMenu";
 import NodeAreaContextMenu from "@/components/context/NodeAreaContextMenu";
 import { useCtx } from "@/hooks/context/useCtx";
-import {
-  DndContext,
-  PointerSensor,
-  pointerWithin,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import { useMoveNodeOnDrop } from "@/hooks/useMoveNodeOnDrop";
+import { DndContext } from "@dnd-kit/core";
 import { useUploadScheduler } from "@/hooks/upload/useUploadScheduler";
 import { useUploadQuerySync } from "@/hooks/upload/useUploadQuerySync";
 import { useUploadInvalidateQueries } from "@/hooks/upload/useUploadInvalidateQueries";
 import { useUploadToast } from "@/hooks/upload/useUploadToast";
 import { useSearch } from "@/hooks/search/useSearch";
 import { useSearchCleanup } from "@/hooks/search/useSearchCleanup";
+import { useDndCollision } from "@/hooks/dnd/useDndCollision";
+import { useDndSensors } from "@/hooks/dnd/useDndSensors";
+import { useDndController } from "@/hooks/dnd/useDndController";
 
 export default function AppLayout() {
+  // Obtener información de la ruta actual
   const location = useLocation();
   const params = useParams();
   const queryParams = new URLSearchParams(location.search);
   const scope = queryParams.get("scope");
+
+  // Hooks y funciones globales
+  const { openCtx } = useCtx();
   const { setSelectedNodes } = useSelectedNodes();
   const { setSearchResults, setSearchQuery } = useSearch();
-  const { openCtx } = useCtx();
+  const { handleDragStart, handleDragOver, handleDragEnd } = useDndController();
+
+  // Determinar si estamos en root o en directory view
   const isRootOrDirView =
     location.pathname === "/" || location.pathname.startsWith("/directory/");
 
@@ -52,14 +53,9 @@ export default function AppLayout() {
     }, 300);
   }, [params, setSelectedNodes, scope, setSearchResults, setSearchQuery]);
 
-  // Configurar sensores para el drag and drop
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 6, // Activar el drag solo si se mueve 6px
-      },
-    })
-  );
+  // Hooks para obtener la configuracion de DnD (para drag and drop)
+  const sensors = useDndSensors();
+  const collision = useDndCollision();
 
   // Limpiar resultados de búsqueda al cambiar de ruta
   useSearchCleanup();
@@ -70,34 +66,6 @@ export default function AppLayout() {
   useUploadInvalidateQueries(); // Invalidar queries al completar subidas
   useUploadToast(); // Gestionar toasts de subida
 
-  // Obtener el handler para mover nodos al soltar
-  const { handleNodeDrop } = useMoveNodeOnDrop();
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    // Leer los datos del elemento sobre el cual se solto
-    const { over } = event;
-    // Extraer la accion q se definio en el droppable
-    const action = over?.data.current?.dropAction;
-    // Ejecutar la accion correspondiente
-    switch (action) {
-      case "node_dropable":
-      case "breadcrumb_dropable": {
-        handleNodeDrop(event); // Dejarselo al hook que se encargue por el respeto xd
-        break;
-      }
-      default: {
-        // No hacer nada si no hay una accion definida
-        break;
-      }
-    }
-    // Aqui se podrian agregar mas cosas si se quiere en el futuro para el drag and drop en cualquier parte
-  };
-
-  // Con el collisionDetection=pointerWithin, el over sera el elemento bajo el cursor literal,
-  // Por defecto se calcula en base al rect de cada elemento, pero asi podria no ser preciso
-  // al usar el snapCenterToCursor en el DragOverlay de los nodos para centrar el elemento arrastrado al cursor.
-  // Por ende opte por usar pointerWithin que es más intuitivo en este caso para calcular el over en base al cursor.
-  // En el futuro si se necesita mas precision se podria implementar un callback para collision personalizado que combine ambos metodos.
   return (
     <>
       {/* Zona de drop global, solamente renderizada en /directory/* y root */}
@@ -119,8 +87,10 @@ export default function AppLayout() {
         <main className="flex-1 flex flex-col relative z-10 min-w-0 h-full">
           <DndContext
             sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
-            collisionDetection={pointerWithin}
+            collisionDetection={collision}
           >
             <Header />
 

@@ -2,7 +2,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaFolderPlus } from "react-icons/fa";
 import NodeTable from "@/components/node/NodeTable";
 import buildBreadcrumbs from "@/utils/build/buildBreadcrumbs";
-import { useNode } from "@/hooks/useNode";
+import { useNode } from "@/hooks/nodes/useNode";
 import Breadcrumb from "@/components/Breadcrumb";
 import CreateFolderModal from "@/components/node/modal/CreateFolderModal";
 import UploadModal from "@/components/upload/UploadModal";

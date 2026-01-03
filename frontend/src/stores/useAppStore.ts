@@ -21,6 +21,7 @@ import {
   type UploadJobSliceType,
 } from "./uploadJobSlice";
 import { createSearchSlice, type SearchSliceType } from "./searchSlice";
+import { createDragSlice, type DragSliceType } from "./dragSlice";
 
 export const useAppStore = create<
   NodeSliceType &
@@ -31,7 +32,8 @@ export const useAppStore = create<
     ContextMenuState &
     UploadSliceType &
     UploadJobSliceType &
-    SearchSliceType
+    SearchSliceType &
+    DragSliceType
 >()(
   devtools((...args) => ({
     ...createNodeSlice(...args),
@@ -43,5 +45,6 @@ export const useAppStore = create<
     ...createUploadSlice(...args),
     ...createUploadJobSlice(...args),
     ...createSearchSlice(...args),
+    ...createDragSlice(...args),
   }))
 );

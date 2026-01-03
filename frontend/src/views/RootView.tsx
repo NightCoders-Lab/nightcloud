@@ -3,7 +3,7 @@ import NodeTable from "@/components/node/NodeTable";
 import CreateFolderModal from "@/components/node/modal/CreateFolderModal";
 import { useNavigate } from "react-router-dom";
 import UploadModal from "@/components/upload/UploadModal";
-import { useNode } from "@/hooks/useNode";
+import { useNode } from "@/hooks/nodes/useNode";
 import RenameNodeModal from "@/components/node/modal/RenameNodeModal";
 import DeleteNodeModal from "@/components/node/modal/DeleteNodeModal";
 import CopyNodeModal from "@/components/node/modal/CopyNodeModal";

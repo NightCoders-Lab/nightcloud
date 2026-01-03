@@ -1,5 +1,5 @@
 import ErrorMessage from "@/components/ErrorMessage";
-import type { useNode } from "@/hooks/useNode";
+import type { useNode } from "@/hooks/nodes/useNode";
 import classNames from "@/utils/classNames";
 import NodeExplorerAnimatedFolder from "./NodeExplorerAnimatedFolder";
 import { useExplorer } from "@/hooks/explorer/useExplorer";
