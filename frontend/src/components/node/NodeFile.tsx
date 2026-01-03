@@ -20,28 +20,44 @@ type NodeFileProps = {
 export default function NodeFile({ node }: Readonly<NodeFileProps>) {
   const { selectedNodes, addSelectedNodes, removeSelectedNode } =
     useSelectedNodes();
-  const { isDropping: dropping, active } = useDrag();
+  const {
+    isDropping: dropping,
+    active,
+    type: dragType,
+    isDragging: isGlobalDragging,
+  } = useDrag();
   const isDropping = isNodeDrag(active) && active.id === node.id && dropping;
 
   // Drag and Drop
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: node.id,
-      data: node,
-      disabled: isDropping,
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging: isSelfDragging,
+  } = useDraggable({
+    id: node.id,
+    data: node,
+    disabled: isDropping,
+  });
+
+  // Determinar si el nodo está seleccionado
+  const isSelected = useMemo(() => {
+    return selectedNodes.some((n) => n.id === node.id);
+  }, [selectedNodes, node.id]);
+  // Determinar si el nodo se está arrastrando como fantasma
+  const isGhost =
+    isSelfDragging || (dragType === "nodes" && isSelected && isGlobalDragging);
+
   // Estilo de transformacion durante el drag
   const style =
-    transform && !isDragging
+    transform && !isSelfDragging
       ? {
           transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
         }
       : undefined;
 
   const { openCtx } = useCtx();
-  const isSelected = useMemo(() => {
-    return selectedNodes.some((n) => n.id === node.id);
-  }, [selectedNodes, node.id]);
 
   // Determinar el icono del nodo
   const category = getCategoryFromMime(node.mime);
@@ -77,7 +93,7 @@ export default function NodeFile({ node }: Readonly<NodeFileProps>) {
         isSelected
           ? "bg-night-primary/10 border-night-primary/20"
           : "hover:bg-night-surface hover:border-night-border/50",
-        isDragging
+        isGhost
           ? "opacity-40 cursor-grabbing border-dashed"
           : "opacity-100 scale-100",
         isDropping ? "opacity-50 cursor-not-allowed" : "",

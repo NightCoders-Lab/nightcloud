@@ -43,7 +43,9 @@ export function useNodeDropStrategy() {
     setDropping(true);
 
     // Ejecutar la mutacion para mover el nodo
-    await moveNodeAsync({ node: activeNode, targetId: overNodeId });
+    await moveNodeAsync({ node: activeNode, targetId: overNodeId }).catch(
+      () => {}
+    );
 
     // Indicar que ya no se está en proceso de dropping
     setDropping(false);

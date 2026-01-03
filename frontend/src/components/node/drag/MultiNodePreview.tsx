@@ -1,26 +1,28 @@
-import { FileCategoryIcons } from "@/data/fileCategoryIcons";
-import type { NodeType } from "@/types";
+import type { NodeSearchType, NodeType } from "@/types";
+import { buildBulkModalTitle } from "@/utils/build/buildBulkModalTitle";
 import classNames from "@/utils/classNames";
-import { getCategoryFromMime } from "@/utils/files/getCategoryFromExtAndMime";
 import { useDndContext } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
-import { FaFolder } from "react-icons/fa6";
+import { LuFiles } from "react-icons/lu";
 
-type ActiveNodeProps = {
-  nodes: NodeType[];
+type MultiNodePreviewProps = {
+  nodes: NodeType[] | NodeSearchType[];
+  tableNodes: NodeType[] | NodeSearchType[];
 };
 
-export default function ActiveNode({ nodes }: Readonly<ActiveNodeProps>) {
+export default function MultiNodePreview({
+  nodes,
+  tableNodes,
+}: Readonly<MultiNodePreviewProps>) {
   const { active, over } = useDndContext();
   const queryClient = useQueryClient();
   if (!active) return null;
-  const node = nodes.find((n) => n.id === active.id);
-  if (!node) return null;
+  const parentId = nodes[0].parentId;
 
   // Buscar si el nodo sobre el que se está arrastrando es un directorio válido
   const ancestors =
-    queryClient.getQueryData<NodeType[]>(["ancestors", node.parentId]) || [];
-  const overValidNode = nodes.find((n) => n.id === over?.id && n.isDir);
+    queryClient.getQueryData<NodeType[]>(["ancestors", parentId]) || [];
+  const overValidNode = tableNodes.find((n) => n.id === over?.id && n.isDir);
   const overValidBreadcrumb = ancestors.find(
     (n) => n.id === over?.id && n.isDir
   );
@@ -34,9 +36,15 @@ export default function ActiveNode({ nodes }: Readonly<ActiveNodeProps>) {
     opacityClass = "opacity-50"; // Menos transparente si es un nodo válido ya que se ve mejor
   }
 
-  // Determinar el icono del nodo arrastrandose
-  const category = getCategoryFromMime(node.mime);
-  const Icon = node.isDir ? FaFolder : FileCategoryIcons[category];
+  // Construir el texto de la vista previa múltiple
+  const folderCount = nodes.filter((n) => n.isDir).length;
+  const fileCount = nodes.length - folderCount;
+  const parts: string[] = [];
+  if (folderCount > 0)
+    parts.push(`${folderCount} folder${folderCount === 1 ? "" : "s"}`);
+  if (fileCount > 0)
+    parts.push(`${fileCount} file${fileCount === 1 ? "" : "s"}`);
+  const text = parts.join(" and ");
 
   return (
     <div
@@ -46,9 +54,9 @@ export default function ActiveNode({ nodes }: Readonly<ActiveNodeProps>) {
       )}
     >
       <div className="w-8 h-8 flex items-center justify-center bg-night-muted/10 rounded-md">
-        <Icon className="w-5 h-5 text-night-muted" />
+        <LuFiles className="w-5 h-5 text-night-muted" />
       </div>
-      <span className="truncate font-medium">{node.name}</span>
+      <span className="truncate font-medium">{text}</span>
     </div>
   );
 }

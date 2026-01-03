@@ -10,7 +10,7 @@ import { DragOverlay } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { useSearch } from "@/hooks/search/useSearch";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import ActiveNode from "./ActiveNode";
+import ActiveNode from "./drag/ActiveNode";
 
 // TODO: Adaptar el backend para los favoritos
 
@@ -37,7 +37,7 @@ export default function NodeTable({ nodes }: Readonly<NodeTableProps>) {
   const hasNodes = nodesToRender.length > 0;
 
   // Configuracion del virtualizer para las filas
-  // La alerta desactivada es del eslint ya que el virtualizer no se puede memoizar 
+  // La alerta desactivada es del eslint ya que el virtualizer no se puede memoizar
   // ya que siempre se necesita actualizar al cambiar el scroll
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -113,7 +113,8 @@ export default function NodeTable({ nodes }: Readonly<NodeTableProps>) {
               height: rowVirtualizer.getTotalSize(), // Altura total del contenedor virtualizado
             }}
           >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => { // Obtenemos las filas virtuales a renderizar
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              // Obtenemos las filas virtuales a renderizar
               // Obtener el nodo correspondiente a la fila virtual
               const node = nodesToRender[virtualRow.index]; // En realidad solo es el index, el virtualizer nunca tiene los datos
 
@@ -138,13 +139,11 @@ export default function NodeTable({ nodes }: Readonly<NodeTableProps>) {
           </div>
         )}
 
-        {!isSearching && (
-          <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
-            {" "}
-            {/* ese modifier centra el dragoverlay al cursor */}
-            <ActiveNode nodes={sortedNodes} />
-          </DragOverlay>
-        )}
+        <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+          {" "}
+          {/* ese modifier centra el dragoverlay al cursor */}
+          <ActiveNode nodes={sortedNodes} />
+        </DragOverlay>
       </div>
     </div>
   );
