@@ -27,6 +27,7 @@ export function useNodeDropStrategy() {
 
     // Prevenir mover una carpeta dentro de si misma
     if (activeId === overId) {
+      endDrag();
       return toast.info("Cannot move a folder into itself.", {
         autoClose: 2000,
       });

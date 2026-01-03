@@ -1,17 +1,11 @@
-import { useMemo } from "react";
 import { FaFolder } from "react-icons/fa6";
 import type { NodeSearchType, NodeType } from "@/types";
 import getHumanFileType from "@/utils/files/getHumanFileType";
 import getHumanFileSize from "@/utils/files/getHumanFileSize";
-import { Link } from "react-router-dom";
 import formatDate from "@/utils/formatDate";
 import classNames from "@/utils/classNames";
 import NodeActions from "./actions/NodeActions";
-import { useCtx } from "@/hooks/context/useCtx";
-import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { useDrag } from "@/hooks/stores/useDrag";
-import { isNodeDrag } from "@/hooks/dnd/utils/dndGuards";
+import { useNodeItemLogic } from "@/hooks/nodes/useNodeItemLogic";
 
 type NodeDirProps = {
   node: NodeType | NodeSearchType;
@@ -19,92 +13,26 @@ type NodeDirProps = {
 
 export default function NodeDir({ node }: Readonly<NodeDirProps>) {
   const {
-    clearSelectedNodes,
-    selectedNodes,
-    addSelectedNodes,
-    removeSelectedNode,
-  } = useSelectedNodes();
-  const {
-    isDropping: dropping,
-    active,
-    type: dragType,
-    isDragging: isGlobalDragging,
-  } = useDrag();
-  const isDropping = isNodeDrag(active) && active.id === node.id && dropping;
-
-  // Drag and Drop
-  const {
+    isSelected,
+    isGhost,
+    isOver,
+    isDropping,
+    style,
+    setNodeRef,
     attributes,
     listeners,
-    setNodeRef: setDraggableRef,
-    transform,
-    isDragging: isSelfDragging,
-  } = useDraggable({
-    id: node.id,
-    data: node,
-    disabled: isDropping,
-  });
-
-  const { isOver, setNodeRef: setDroppableRef } = useDroppable({
-    id: node.id,
-    data: {
-      dropAction: "node_dropable", // Para identificar droppables por feat en el futuro
-      ...node,
-    },
-  });
-
-  // Determinar si el nodo está seleccionado
-  const isSelected = useMemo(() => {
-    return selectedNodes.some((n) => n.id === node.id);
-  }, [selectedNodes, node.id]);
-  // Determinar si el nodo se está arrastrando como fantasma
-  const isGhost =
-    isSelfDragging || (dragType === "nodes" && isSelected && isGlobalDragging);
-
-  // Estilo de transformacion durante el drag
-  const style =
-    transform && !isSelfDragging
-      ? {
-          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        }
-      : undefined;
-
-  const { openCtx } = useCtx();
-
-  // Funciones de seleccion
-  const toggleSelect = (selectedNode: NodeType | NodeSearchType) => {
-    if (selectedNodes.some((node) => node.id === selectedNode.id)) {
-      removeSelectedNode(selectedNode.id);
-    } else {
-      addSelectedNodes([selectedNode]);
-    }
-  };
-  const handleOnClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleSelect(node);
-  };
-  // Manejar el menu contextual
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openCtx("node", e.clientX, e.clientY, { selectedNode: node });
-    if (selectedNodes.some((n) => n.id === node.id)) return;
-    clearSelectedNodes();
-    toggleSelect(node);
-  };
-
-  // Combinar refs de draggable y droppable
-  const setNodeRef = (el: HTMLLIElement | null) => {
-    setDraggableRef(el);
-    setDroppableRef(el);
-  };
+    clickEvents,
+    handleContextMenu,
+    toggleSelect,
+  } = useNodeItemLogic({ node, mode: "folder" });
 
   return (
     <li
       ref={setNodeRef}
+      style={style}
       {...attributes}
       {...listeners}
-      style={style}
+      {...clickEvents}
       onContextMenu={handleContextMenu}
       className={classNames(
         isSelected
@@ -115,20 +43,21 @@ export default function NodeDir({ node }: Readonly<NodeDirProps>) {
           : "opacity-100 scale-100",
         isOver ? "border-night-primary/40 bg-night-primary/20" : "",
         isDropping ? "opacity-50 cursor-not-allowed" : "",
-        "relative z-10 grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 items-center mb-1 px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent cursor-default w-full hover:cursor-pointer"
+        "relative z-10 grid grid-cols-[50px_1fr_100px_100px_180px_50px] gap-4 items-center mb-1 px-4 py-3 rounded-lg transition-all duration-200 group border border-transparent cursor-default select-none w-full hover:cursor-pointer"
       )}
     >
-      <Link
-        to={`/directory/${node.id}`}
-        className="absolute inset-0 z-20"
-        aria-label={`Open ${node.name}`}
-      />
       {/* Checkbox */}
       <div className="flex justify-center">
         <input
           type="checkbox"
           checked={isSelected}
-          onClick={handleOnClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSelect();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
           className="z-30 w-4 h-4 rounded border-night-border bg-night-surface text-night-primary focus:ring-offset-night-main cursor-pointer"
           readOnly
         />

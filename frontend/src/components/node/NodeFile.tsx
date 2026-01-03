@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { NodeSearchType, NodeType } from "@/types";
 import getHumanFileType from "@/utils/files/getHumanFileType";
 import getHumanFileSize from "@/utils/files/getHumanFileSize";
@@ -6,87 +5,37 @@ import { getCategoryFromMime } from "@/utils/files/getCategoryFromExtAndMime";
 import { FileCategoryIcons } from "@/data/fileCategoryIcons";
 import formatDate from "@/utils/formatDate";
 import NodeActions from "./actions/NodeActions";
-import { useCtx } from "@/hooks/context/useCtx";
-import { useSelectedNodes } from "@/hooks/stores/useSelectedNodes";
-import { useDraggable } from "@dnd-kit/core";
 import classNames from "@/utils/classNames";
-import { useDrag } from "@/hooks/stores/useDrag";
-import { isNodeDrag } from "@/hooks/dnd/utils/dndGuards";
+import { useNodeItemLogic } from "@/hooks/nodes/useNodeItemLogic";
 
 type NodeFileProps = {
   node: NodeType | NodeSearchType;
 };
 
 export default function NodeFile({ node }: Readonly<NodeFileProps>) {
-  const { selectedNodes, addSelectedNodes, removeSelectedNode } =
-    useSelectedNodes();
   const {
-    isDropping: dropping,
-    active,
-    type: dragType,
-    isDragging: isGlobalDragging,
-  } = useDrag();
-  const isDropping = isNodeDrag(active) && active.id === node.id && dropping;
-
-  // Drag and Drop
-  const {
+    isSelected,
+    isGhost,
+    isDropping, // Siempre false en archivos
+    style,
+    setNodeRef,
     attributes,
     listeners,
-    setNodeRef,
-    transform,
-    isDragging: isSelfDragging,
-  } = useDraggable({
-    id: node.id,
-    data: node,
-    disabled: isDropping,
-  });
-
-  // Determinar si el nodo está seleccionado
-  const isSelected = useMemo(() => {
-    return selectedNodes.some((n) => n.id === node.id);
-  }, [selectedNodes, node.id]);
-  // Determinar si el nodo se está arrastrando como fantasma
-  const isGhost =
-    isSelfDragging || (dragType === "nodes" && isSelected && isGlobalDragging);
-
-  // Estilo de transformacion durante el drag
-  const style =
-    transform && !isSelfDragging
-      ? {
-          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        }
-      : undefined;
-
-  const { openCtx } = useCtx();
+    clickEvents,
+    handleContextMenu,
+    toggleSelect,
+  } = useNodeItemLogic({ node, mode: "file" });
 
   // Determinar el icono del nodo
   const category = getCategoryFromMime(node.mime);
   const Icon = FileCategoryIcons[category];
-
-  // Funciones de seleccion
-  const toggleSelect = (selectedNode: NodeType | NodeSearchType) => {
-    if (selectedNodes.some((node) => node.id === selectedNode.id)) {
-      removeSelectedNode(selectedNode.id);
-    } else {
-      addSelectedNodes([selectedNode]);
-    }
-  };
-  const handleOnClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleSelect(node);
-  };
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openCtx("node", e.clientX, e.clientY, { selectedNode: node });
-    toggleSelect(node);
-  };
 
   return (
     <li
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      {...clickEvents}
       style={style}
       onContextMenu={handleContextMenu}
       className={classNames(
@@ -105,7 +54,13 @@ export default function NodeFile({ node }: Readonly<NodeFileProps>) {
         <input
           type="checkbox"
           checked={isSelected}
-          onClick={handleOnClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSelect();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
           className="w-4 h-4 rounded border-night-border bg-night-surface text-night-primary focus:ring-offset-night-main cursor-pointer"
           readOnly
         />

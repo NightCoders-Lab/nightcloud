@@ -5,7 +5,7 @@ export function useDndSensors() {
   return useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 6, // Activar el drag solo si se mueve 6px
+        distance: 8, // Activar el drag solo si se mueve 8px
       },
     })
   );
