@@ -1,5 +1,4 @@
 import type { NodeSearchType, NodeType } from "@/types";
-import { buildBulkModalTitle } from "@/utils/build/buildBulkModalTitle";
 import classNames from "@/utils/classNames";
 import { useDndContext } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
