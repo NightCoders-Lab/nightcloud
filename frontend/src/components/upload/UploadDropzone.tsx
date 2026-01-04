@@ -37,7 +37,7 @@ export default function UploadDropzone() {
       }
     },
     multiple: true, // Permitir múltiples archivos
-    noClick: true, // Deshabilitar clic para abrir el diálogo
+
     noKeyboard: true, // Deshabilitar soporte de teclado
     disabled: !enabled,
   });
@@ -58,7 +58,7 @@ export default function UploadDropzone() {
           stiffness: 300,
           damping: 20,
         }}
-        className="flex flex-col items-center gap-3 mt-10 rounded-lg bg-night-primary/15 backdrop-blur-md ring-1 ring-night-primary/30 px-10 py-8 text-night-text border-dashed border-2 border-night-primary/50"
+        className="flex flex-col items-center gap-4 mt-10 rounded-lg bg-night-primary/15 backdrop-blur-md ring-1 ring-night-primary/30 px-10 py-8 text-night-text border-dashed border-2 border-night-primary/50"
       >
         <input {...getInputProps()} />
         <motion.div
@@ -68,11 +68,26 @@ export default function UploadDropzone() {
           <HiOutlineCloudUpload className="text-5xl text-night-primary/80" />
         </motion.div>
 
-        <p className="text-lg font-medium">Drop files or folders to upload</p>
+        <div className="text-center space-y-1">
+          <p className="text-lg font-medium text-night-text">
+            Drag & drop files here
+          </p>
+          <p className="text-sm text-night-muted">
+            or click the button below to browse
+          </p>
+        </div>
 
-        <p className="text-sm text-night-muted">
-          The files will be uploaded to the selected directory
-        </p>
+        {/* 3. BOTÓN EXPLÍCITO */}
+        <button
+          type="button"
+          className="mt-2 px-5 py-2.5 bg-night-primary text-white rounded-lg font-medium text-sm hover:bg-night-primary-hover transition-all shadow-lg shadow-night-primary/20 hover:scale-105 hover:cursor-pointer active:scale-95"
+        >
+          Select Files
+        </button>
+
+        <span className="text-xs text-center text-night-muted">
+          Max 10000 files
+        </span>
       </motion.div>
     </div>
   );

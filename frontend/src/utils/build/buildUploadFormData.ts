@@ -1,5 +1,6 @@
 import type { NodeType } from "@/types";
 import type { FileWithPath } from "react-dropzone";
+import { normalizeFilePath } from "../files/normalizeFilePath";
 
 /**
  * @description Construye un FormData para subir archivos, incluyendo un manifiesto con metadatos.
@@ -16,10 +17,7 @@ export function buildUploadFormData(
   // Crear el manifiesto de archivos
   const manifest = files.map((file) => ({
     name: file.name,
-    path: (file.path || file.webkitRelativePath || file.name).replaceAll(
-      "\\",
-      "/"
-    ),
+    path: normalizeFilePath(file),
     size: file.size.toString(), // Convertir size a string por compatibilidad
     mimeType: file.type,
   }));
