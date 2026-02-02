@@ -6,9 +6,16 @@ import type { CorsOptions } from "cors";
 export const corsConfig: CorsOptions = {
   origin: function (origin, callback) {
     // Allow requests from FRONTEND_URL and localhost during development
-    const whitelist = [process.env.FRONTEND_URL, "http://localhost:5173"];
+    const frontendUrls = process.env.FRONTEND_URL
+      ? process.env.FRONTEND_URL.split("|")
+      : []; // Now supports multiple urls
+    const whitelist = [
+      ...frontendUrls,
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ];
 
-    if (whitelist.includes(origin)) {
+    if (!origin || whitelist.includes(origin)) {
       callback(null, true);
     } else {
       // Allow requests with no origin only in development
