@@ -1,0 +1,32 @@
+[tools]
+bun = "1.3.9"
+node = "24"
+
+[env]
+NODE_ENV = "development"
+
+[tasks.install_backend]
+dir = "backend"
+run = "bun install --ignore-scripts"
+sources = ["backend/package.json", "backend/bun.lockb"]
+
+[tasks.install_frontend]
+dir = "frontend"
+run = "bun install"
+sources = ["frontend/package.json", "frontend/bun.lockb"]
+
+[tasks.backend]
+depends = ["install_backend"]
+dir = "backend"
+run = "bun dev"
+
+[tasks.frontend]
+depends = ["install_frontend"]
+dir = "frontend"
+run = "bun dev --host"
+
+[tasks.husky]
+run = "bun run prepare-husky"
+
+[tasks.dev]
+run = "mise run --jobs 2 backend ::: frontend"

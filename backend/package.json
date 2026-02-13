@@ -31,7 +31,7 @@
     "Lorelvis Santos <santoslorelvis@gmail.com> GitHub: lorelvis-santos"
   ],
   "license": "MIT",
-  "packageManager": "bun@1.3.5",
+  "packageManager": "bun@1.3.9",
   "files": [
     "src/",
     "build.mjs",
